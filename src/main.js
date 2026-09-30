@@ -296,20 +296,55 @@ function updateHud() {
   }
 }
 
+// ---------- Problems on a device: show them instead of freezing ----------
+// Any error shows in a red box at the bottom of the screen, so a screenshot tells us what broke.
+// Adding ?debug to the address also shows what the game is doing in the top corner.
+const errorBox = $('error-box');
+function showError(e) {
+  const msg = e && (e.message || e.reason?.message || String(e.reason || e));
+  const where = e && (e.filename || (e.error && e.error.stack) || (e.stack) || '').toString().split('\n').slice(0, 2).join(' ');
+  errorBox.textContent = `Something went wrong: ${msg}  ${where}`.slice(0, 300);
+  errorBox.hidden = false;
+}
+window.addEventListener('error', showError);
+window.addEventListener('unhandledrejection', showError);
+
+const debugBox = new URLSearchParams(location.search).has('debug') ? $('debug-box') : null;
+if (debugBox) debugBox.hidden = false;
+let fpsFrames = 0, fpsSince = performance.now(), fps = 0;
+function updateDebug(now) {
+  fpsFrames++;
+  if (now - fpsSince > 1000) { fps = Math.round(fpsFrames * 1000 / (now - fpsSince)); fpsFrames = 0; fpsSince = now; }
+  const b = match.ball;
+  debugBox.textContent = [
+    `state: ${match.state}  t: ${match.t.toFixed(1)}  fps: ${fps}`,
+    `player: ${player ? player.name : '-'}  questions: ${match.askQuestions}`,
+    `ball: ${b.owner ? `${b.owner.team.name} ${b.owner.num}` : 'loose'}  you: ${match.controlled.num}`,
+    `question card: ${quiz.el.hidden ? 'hidden' : 'showing'}  zoom: ${window.visualViewport ? window.visualViewport.scale.toFixed(2) : '?'}`,
+  ].join('\n');
+}
+
 let last = performance.now();
 let lastState = match.state;
 function frame(now) {
-  const dt = Math.min((now - last) / 1000, 0.05);
-  last = now;
-  match.move = input.readMove();
-  match.update(dt);
-  if (match.state !== lastState) {
-    if (match.state === 'question') askQuestion();
-    if (match.state === 'over') onGameOver();
-    lastState = match.state;
+  requestAnimationFrame(frame); // first, so one bad frame can't stop the game
+  try {
+    const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
+    last = now;
+    match.move = input.readMove();
+    match.update(dt);
+    if (match.state !== lastState) {
+      lastState = match.state;
+      if (match.state === 'question') {
+        try { askQuestion(); } catch (e) { showError(e); quiz.el.hidden = true; current = null; match.skipQuestion(); }
+      }
+      if (match.state === 'over') onGameOver();
+    }
+    view.update(dt);
+    updateHud();
+    if (debugBox) updateDebug(now);
+  } catch (e) {
+    showError(e);
   }
-  view.update(dt);
-  updateHud();
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

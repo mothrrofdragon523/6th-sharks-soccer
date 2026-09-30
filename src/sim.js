@@ -229,6 +229,15 @@ export class Match {
     if (this.ball.owner === shooter) this.scriptedShot(shooter, correct, aimY);
   }
 
+  // If the question can't be shown, don't leave the game paused: take an ordinary shot instead.
+  skipQuestion() {
+    if (!this.pendingShot) return;
+    const { shooter, aimY } = this.pendingShot;
+    this.pendingShot = null;
+    this.state = 'play';
+    if (this.ball.owner === shooter) this.shoot(shooter, 0.7, aimY);
+  }
+
   scriptedShot(p, scores, aimY) {
     const gx = oppGoalX(p.team);
     const ty = clamp(aimY, -1, 1) * GOAL_HALF * (scores ? 0.7 : 0.5);
