@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b3d1a">
+  <link rel="manifest" href="manifest.json">
+  <title>6th Shark's Soccer</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #0b3d1a;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Arial Black', Arial, sans-serif;
+      color: #fff;
+    }
+    #scene { display: block; position: fixed; inset: 0; }
+    [hidden] { display: none !important; }
+
+    /* Scoreboard, top-left like a TV broadcast */
+    #scoreboard {
+      position: fixed;
+      top: max(10px, env(safe-area-inset-top));
+      left: max(12px, env(safe-area-inset-left));
+      display: flex;
+      align-items: stretch;
+      font-size: 16px;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    #scoreboard span { padding: 6px 10px; display: flex; align-items: center; gap: 6px; }
+    #scoreboard .logo { height: 22px; width: auto; }
+    .home { background: #6cc4ee; color: #0b2a4a; }
+    .away { background: #1f8a80; }
+    #score { background: #111; min-width: 48px; text-align: center; }
+    #rule {
+      position: fixed;
+      top: calc(max(10px, env(safe-area-inset-top)) + 38px);
+      left: max(12px, env(safe-area-inset-left));
+      font: bold 12px Arial, sans-serif;
+      text-shadow: 0 1px 3px #000;
+    }
+
+    #banner {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      text-align: center;
+      text-shadow: 0 3px 10px rgba(0, 0, 0, 0.8), 0 0 2px #000;
+    }
+    #banner-title { font-size: clamp(32px, 9vmin, 72px); }
+    #banner-sub { font-size: clamp(14px, 3.6vmin, 26px); margin-top: 8px; }
+    #toast {
+      position: fixed;
+      top: 22%;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 6px 16px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 6px;
+      font-size: 18px;
+      pointer-events: none;
+    }
+
+    #power {
+      position: fixed;
+      width: 64px;
+      height: 10px;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid rgba(0, 0, 0, 0.6);
+      border-radius: 4px;
+      pointer-events: none;
+    }
+    #power-fill { height: 100%; width: 0; background: #ffeb3b; border-radius: 2px; }
+    #power-fill.max { background: #ff5252; }
+
+    #stamina {
+      position: fixed;
+      width: 48px;
+      height: 6px;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(0, 0, 0, 0.6);
+      border-radius: 3px;
+      pointer-events: none;
+    }
+    #stamina-fill { height: 100%; width: 100%; background: #66bb6a; border-radius: 2px; }
+    #stamina-fill.low { background: #ef5350; }
+    #stamina.exhausted { animation: blink 0.5s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: 0.35; } }
+    .btn.tired { opacity: 0.35; }
+
+    /* Touch controls (only shown on touch screens) */
+    #joy-hint, #joy-base, .btn { display: none; }
+    body.touch #joy-hint, body.touch .btn { display: flex; }
+    #joy-hint {
+      position: fixed;
+      left: calc(max(16px, env(safe-area-inset-left)) + 6vmin);
+      bottom: 8vmin;
+      width: 24vmin;
+      height: 24vmin;
+      border: 3px solid rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    #joy-base {
+      position: fixed;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      border: 3px solid rgba(255, 255, 255, 0.5);
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+    #joy-knob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 44%;
+      height: 44%;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.6);
+    }
+    .btn {
+      position: fixed;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      border: 3px solid rgba(255, 255, 255, 0.55);
+      font-size: clamp(11px, 2.8vmin, 17px);
+      text-shadow: 0 1px 2px #000;
+      box-sizing: border-box;
+    }
+    .btn.held { border-color: #fff; filter: brightness(1.4); }
+    #btn-b {
+      right: calc(max(16px, env(safe-area-inset-right)) + 2vmin);
+      bottom: 7vmin;
+      width: 23vmin;
+      height: 23vmin;
+      background: rgba(229, 57, 53, 0.5);
+    }
+    #btn-b.defend { background: rgba(251, 140, 0, 0.5); }
+    #btn-a {
+      right: calc(max(16px, env(safe-area-inset-right)) + 27vmin);
+      bottom: 3vmin;
+      width: 17vmin;
+      height: 17vmin;
+      background: rgba(67, 160, 71, 0.5);
+    }
+    #btn-s {
+      right: calc(max(16px, env(safe-area-inset-right)) + 17vmin);
+      bottom: 32vmin;
+      width: 15vmin;
+      height: 15vmin;
+      background: rgba(30, 136, 229, 0.5);
+    }
+
+    #help {
+      position: fixed;
+      bottom: 10px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font: 14px Arial, sans-serif;
+      text-shadow: 0 1px 3px #000;
+      pointer-events: none;
+    }
+    body.touch #help { display: none; }
+
+    /* Start menu: choose a season */
+    #menu {
+      position: fixed;
+      inset: 0;
+      z-index: 4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(6px, 2.5vmin, 16px);
+      padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+               max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      box-sizing: border-box;
+      background: linear-gradient(rgba(0, 30, 25, 0.55), rgba(0, 0, 0, 0.8));
+      overflow-y: auto;
+    }
+    #menu h1 {
+      margin: 0;
+      font-size: clamp(22px, 7vmin, 48px);
+      letter-spacing: 1px;
+      text-align: center;
+      text-shadow: 0 3px 10px rgba(0, 0, 0, 0.8);
+    }
+    #menu-sub {
+      font: bold clamp(12px, 3vmin, 17px) Arial, sans-serif;
+      opacity: 0.85;
+    }
+    #levels {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: clamp(6px, 1.6vmin, 14px);
+      width: min(980px, 100%);
+    }
+    .level {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(3px, 1vmin, 8px);
+      padding: clamp(8px, 2.2vmin, 16px);
+      text-align: left;
+      color: #fff;
+      font-family: inherit;
+      background: rgba(12, 16, 22, 0.85);
+      border: 2px solid var(--c);
+      border-top-width: 6px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.1s;
+    }
+    .level:hover:not(:disabled) { background: rgba(30, 36, 46, 0.92); }
+    .level:active:not(:disabled) { transform: scale(0.97); }
+    .level:disabled { opacity: 0.45; cursor: default; }
+    .level .icon { font-size: clamp(18px, 5vmin, 32px); line-height: 1; }
+    .level h2 { margin: 0; font-size: clamp(13px, 3.6vmin, 22px); color: var(--c); }
+    .level p { margin: 0; font: clamp(10px, 2.6vmin, 15px)/1.3 Arial, sans-serif; opacity: 0.92; }
+    .level-championship {
+      background: linear-gradient(160deg, rgba(90, 70, 0, 0.9), rgba(12, 16, 22, 0.9));
+      box-shadow: 0 0 18px rgba(253, 216, 53, 0.35);
+    }
+    .level-championship p { font-weight: bold; font-size: clamp(11px, 3vmin, 17px); }
+    @media (max-width: 560px) { #levels { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    #levels[hidden] { display: none; }
+
+    /* Who's playing? and the PIN pad */
+    #who { display: flex; gap: clamp(10px, 3vmin, 24px); }
+    .who-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      width: clamp(120px, 30vmin, 200px);
+      padding: clamp(12px, 3vmin, 22px);
+      font: clamp(18px, 5vmin, 28px) 'Arial Black', Arial, sans-serif;
+      color: #fff;
+      background: rgba(12, 16, 22, 0.85);
+      border: 3px solid #6cc4ee;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+    #who-guest { border-color: #9e9e9e; }
+    .who-card .icon { font-size: clamp(30px, 9vmin, 52px); line-height: 1; }
+    .who-card:active { transform: scale(0.97); }
+    #pin { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; }
+    #pin[hidden] { display: none; }
+    #pin-input {
+      width: 7em;
+      padding: 8px 12px;
+      font: bold clamp(20px, 6vmin, 30px) Arial, sans-serif;
+      letter-spacing: 6px;
+      text-align: center;
+      border: 3px solid #6cc4ee;
+      border-radius: 10px;
+    }
+    .pin-ok, .pin-back {
+      padding: 10px 18px;
+      font: bold clamp(15px, 4vmin, 20px) Arial, sans-serif;
+      color: #fff;
+      background: #0b2a4a;
+      border: 2px solid #6cc4ee;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .pin-back { background: transparent; border-color: rgba(255, 255, 255, 0.5); }
+    #pin-error { width: 100%; text-align: center; font: bold 15px Arial, sans-serif; color: #ff8a80; }
+    #pin-error[hidden] { display: none; }
+    #playing-as { font: clamp(12px, 3vmin, 15px) Arial, sans-serif; opacity: 0.9; }
+    #switch-player {
+      font: inherit;
+      color: #6cc4ee;
+      text-decoration: underline;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    /* Shot question */
+    #quiz {
+      position: fixed;
+      inset: 0;
+      z-index: 6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+               max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      box-sizing: border-box;
+      background: rgba(0, 0, 0, 0.55);
+    }
+    .quiz-card {
+      width: min(860px, 100%);
+      max-height: 100%;
+      overflow-y: auto;
+      box-sizing: border-box;
+      padding: clamp(10px, 2.6vmin, 20px);
+      background: #fdfdf8;
+      color: #1a1a1a;
+      border-radius: 14px;
+      border-top: 6px solid #004c54;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: clamp(6px, 1.8vmin, 12px);
+    }
+    .quiz-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: clamp(12px, 3vmin, 16px);
+      color: #004c54;
+    }
+    #quiz-level { font: bold 11px Arial, sans-serif; padding: 3px 8px; border-radius: 10px; color: #fff; }
+    .lvl-easy { background: #43a047; }
+    .lvl-medium { background: #fb8c00; }
+    .lvl-hard { background: #e53935; }
+    .quiz-body { display: flex; flex-direction: column; gap: clamp(6px, 1.8vmin, 12px); }
+    #quiz.has-graph .quiz-body { display: grid; grid-template-columns: 1.1fr 1fr; align-items: start; }
+    #quiz-q { margin: 0; font: bold clamp(15px, 4.2vmin, 24px)/1.3 Arial, sans-serif; }
+    #quiz-graph { display: block; width: 100%; height: auto; margin-top: 8px; border: 1px solid #ddd; border-radius: 6px; }
+    #quiz-choices { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(6px, 1.5vmin, 10px); }
+    #quiz.has-graph #quiz-choices { grid-template-columns: 1fr; }
+    .choice {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: clamp(40px, 11vmin, 60px);
+      padding: 6px 12px;
+      text-align: left;
+      font: bold clamp(13px, 3.6vmin, 19px)/1.25 Arial, sans-serif;
+      color: #1a1a1a;
+      background: #fff;
+      border: 2px solid #cfd8dc;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .choice:hover:not(:disabled) { border-color: #004c54; background: #f0f7f7; }
+    .choice .key {
+      flex: none;
+      width: 26px;
+      height: 26px;
+      line-height: 26px;
+      text-align: center;
+      border-radius: 50%;
+      color: #fff;
+      background: #004c54;
+      font-size: 13px;
+    }
+    .choice:disabled { cursor: default; opacity: 0.6; }
+    .choice.right { opacity: 1; border-color: #2e7d32; background: #e8f5e9; }
+    .choice.right .key { background: #2e7d32; }
+    .choice.wrong { opacity: 1; border-color: #c62828; background: #ffebee; }
+    .choice.wrong .key { background: #c62828; }
+    #quiz-result {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font: clamp(12px, 3.2vmin, 16px)/1.35 Arial, sans-serif;
+    }
+    #quiz-result > div { flex: 1; }
+    #quiz-verdict.yes { color: #2e7d32; }
+    #quiz-verdict.no { color: #c62828; }
+    #quiz-go {
+      flex: none;
+      padding: clamp(8px, 2.4vmin, 14px) clamp(14px, 4vmin, 24px);
+      font: bold clamp(14px, 3.8vmin, 20px) 'Arial Black', Arial, sans-serif;
+      color: #fff;
+      background: #004c54;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    /* Hide match controls and the scoreboard while the menu is up */
+    body.in-menu .btn, body.in-menu #joy-hint, body.in-menu #scoreboard,
+    body.in-menu #rule, body.in-menu #help { display: none !important; }
+
+    #fullscreen {
+      z-index: 5;
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(8px, env(safe-area-inset-right));
+      padding: 8px 12px;
+      font: bold 14px Arial, sans-serif;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.45);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      border-radius: 8px;
+    }
+    #rotate {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      background: #0b3d1a;
+      font-size: 22px;
+      text-align: center;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    @media (orientation: portrait) and (pointer: coarse) {
+      #rotate { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="scoreboard"><span class="home"><img class="logo" src="assets/sharks-logo.png" alt="" onerror="this.remove()">SHARKS</span><span id="score">0 – 0</span><span class="away">EAGLES<img class="logo" src="assets/eagles-logo.png" alt="" onerror="this.remove()"></span></div>
+  <div id="rule">First to 5</div>
+  <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="toast" hidden></div>
+  <div id="power" hidden><div id="power-fill"></div></div>
+  <div id="stamina" hidden><div id="stamina-fill"></div></div>
+
+  <div id="joy-hint"></div>
+  <div id="joy-base"><div id="joy-knob"></div></div>
+  <div class="btn" id="btn-s" data-key="s">SPRINT</div>
+  <div class="btn" id="btn-a" data-key="a">PASS</div>
+  <div class="btn" id="btn-b" data-key="b">SHOOT</div>
+  <div id="help">Move: WASD / arrows · Pass / Switch: J · Shoot / Tackle: K or Space (hold to power up) · Sprint: Shift</div>
+
+  <div id="menu">
+    <h1>6TH SHARK'S SOCCER</h1>
+    <div id="menu-sub">Loading players…</div>
+    <div id="who" hidden>
+      <button id="who-gabe" class="who-card"><span class="icon">🦈</span>Gabe</button>
+      <button id="who-guest" class="who-card"><span class="icon">👋</span>Guest</button>
+    </div>
+    <form id="pin" hidden autocomplete="off">
+      <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" aria-label="PIN">
+      <button type="submit" class="pin-ok">OK</button>
+      <button type="button" id="pin-cancel" class="pin-back">Back</button>
+      <div id="pin-error" hidden>That's not it. Try again.</div>
+    </form>
+    <div id="levels"></div>
+    <div id="playing-as" hidden>
+      Playing as <strong id="playing-as-name"></strong><span id="playing-as-note"></span>
+      · <button id="switch-player" type="button">Switch player</button>
+    </div>
+  </div>
+
+  <div id="quiz" hidden>
+    <div class="quiz-card">
+      <div class="quiz-head"><span>⚽ SHOT ON GOAL!</span><span id="quiz-level"></span></div>
+      <div class="quiz-body">
+        <div class="quiz-ask">
+          <p id="quiz-q"></p>
+          <canvas id="quiz-graph" width="440" height="260" hidden></canvas>
+        </div>
+        <div id="quiz-choices"></div>
+      </div>
+      <div id="quiz-result" hidden>
+        <div><strong id="quiz-verdict"></strong> <span id="quiz-why"></span></div>
+        <button id="quiz-go"></button>
+      </div>
+    </div>
+  </div>
+
+  <button id="fullscreen">Full screen</button>
+  <div id="rotate">Turn your device sideways to play ⚽</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module" src="src/main.js"></script>
+  <script>
+    // Full screen + landscape lock where the browser allows it (Android Chrome does).
+    const fsButton = document.getElementById('fullscreen');
+    const root = document.documentElement;
+    if (!root.requestFullscreen && !root.webkitRequestFullscreen) fsButton.style.display = 'none';
+    fsButton.addEventListener('click', async () => {
+      try {
+        if (root.requestFullscreen) await root.requestFullscreen();
+        else root.webkitRequestFullscreen();
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (e) { /* not allowed here; ignore */ }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      fsButton.style.display = document.fullscreenElement ? 'none' : '';
+    });
+    document.addEventListener('contextmenu', e => e.preventDefault());
+  </script>
+</body>
+</html>

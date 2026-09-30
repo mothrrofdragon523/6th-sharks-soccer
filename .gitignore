@@ -1,0 +1,15 @@
+.DS_Store
+.claude/
+
+# Only publish the Mixamo animations the game actually uses (see CLIPS in src/characters.js)
+assets/mixamo/Soccer Game Pack/*
+!assets/mixamo/Soccer Game Pack/offensive idle (fixed).fbx
+!assets/mixamo/Soccer Game Pack/Idle.fbx
+!assets/mixamo/Soccer Game Pack/jog forward.fbx
+!assets/mixamo/Soccer Game Pack/Fast Run.fbx
+!assets/mixamo/Soccer Game Pack/Sprint.fbx
+!assets/mixamo/Soccer Game Pack/kick soccerball (2).fbx
+!assets/mixamo/Soccer Game Pack/strike foward jog.fbx
+!assets/mixamo/Soccer Game Pack/soccer tackle (3).fbx
+!assets/mixamo/Soccer Game Pack/goalkeeper idle.fbx
+!assets/mixamo/Soccer Game Pack/goalkeeper catch.fbx

@@ -1,0 +1,9 @@
+{
+  "name": "6th Shark's Soccer",
+  "short_name": "Shark Soccer",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b3d1a",
+  "theme_color": "#0b3d1a"
+}
