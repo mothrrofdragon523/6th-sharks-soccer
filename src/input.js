@@ -25,6 +25,18 @@ export class Input {
     window.addEventListener('keydown', e => this.onKeyDown(e));
     window.addEventListener('keyup', e => this.onKeyUp(e));
     window.addEventListener('blur', () => this.releaseAll());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.releaseAll(); });
+
+    // iPad Safari ignores the page's "no zoom" setting, so a quick double tap on a button
+    // (like TACKLE) zooms the page in. Block the browser's own touch handling over the game;
+    // the menu, questions and Full screen button keep theirs so their taps still register.
+    const blockZoom = e => { if (!e.target.closest('#menu, #quiz, #fullscreen')) e.preventDefault(); };
+    for (const type of ['touchstart', 'touchmove', 'touchend', 'dblclick']) {
+      document.addEventListener(type, blockZoom, { passive: false });
+    }
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) { // iPad pinch zoom
+      document.addEventListener(type, e => e.preventDefault(), { passive: false });
+    }
   }
 
   setTouch(on) {

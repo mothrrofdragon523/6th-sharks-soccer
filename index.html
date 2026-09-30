@@ -25,6 +25,8 @@
       color: #fff;
     }
     #scene { display: block; position: fixed; inset: 0; }
+    /* No double-tap zoom on the menu or question buttons either (taps still work) */
+    button, input, .choice, .level, .who-card { touch-action: manipulation; }
     [hidden] { display: none !important; }
 
     /* Scoreboard, top-left like a TV broadcast */
