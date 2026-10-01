@@ -30,7 +30,7 @@ export class Input {
     // iPad Safari ignores the page's "no zoom" setting, so a quick double tap on a button
     // (like TACKLE) zooms the page in. Block the browser's own touch handling over the game;
     // the menu, questions and Full screen button keep theirs so their taps still register.
-    const blockZoom = e => { if (!e.target.closest('#menu, #quiz, #fullscreen')) e.preventDefault(); };
+    const blockZoom = e => { if (!e.target.closest('#menu, #quiz, #result, #fullscreen')) e.preventDefault(); };
     for (const type of ['touchstart', 'touchmove', 'touchend', 'dblclick']) {
       document.addEventListener(type, blockZoom, { passive: false });
     }
@@ -50,9 +50,8 @@ export class Input {
 
   onDown(e) {
     if (e.pointerType === 'touch' && !this.touch) this.setTouch(true);
-    if (e.target.closest('#fullscreen, #menu, #quiz')) return; // those handle their own taps
+    if (e.target.closest('#fullscreen, #menu, #quiz, #result')) return; // those handle their own taps
     e.preventDefault();
-    if (this.match.canContinue()) { this.match.continue(); return; }
     if (this.match.state === 'menu' || this.match.state === 'question') return;
 
     const btn = e.target.closest('.btn');
@@ -98,7 +97,6 @@ export class Input {
   }
 
   onKeyDown(e) {
-    if (this.match.canContinue()) { this.match.continue(); return; }
     if (this.match.state === 'question') return; // the question screen has its own keys
     this.keys.add(e.code);
     const key = KEY_BUTTONS[e.code];

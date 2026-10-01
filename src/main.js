@@ -1,4 +1,4 @@
-import { Match, HOME } from './sim.js';
+import { Match } from './sim.js';
 import { View } from './view.js';
 import { Input } from './input.js';
 import { LEVELS } from './levels.js';
@@ -40,7 +40,10 @@ let series = null;                    // { level, game, wins: { home, away }, do
 let game = null;                      // what the answer log records about this game
 let player = savedPlayer();           // who's playing on this device (Gabe or Guest)
 
+let currentLevel = null;
+
 function beginGame(level, questionSet, label) {
+  currentLevel = level;
   deck = new QuestionDeck(questionSet);
   stats = { right: 0, total: 0 };
   game = {
@@ -70,30 +73,110 @@ function nextSeriesGame() {
   beginGame(series.level, series.level.series[series.game - 1], `Championship · Game ${series.game} of 3`);
 }
 
-// Tap after the final whistle: the next Championship game, or back to the menu
-match.onContinue = () => {
-  if (series && !series.done) nextSeriesGame();
-  else { series = null; match.toMenu(); }
+// ---------- End of a game: "You win!" (with fireworks) or "Too bad!" (with Try Again) ----------
+// It waits for a button press, so a stray tap at the final whistle can't skip it.
+const result = {
+  el: $('result'), title: $('result-title'), score: $('result-score'), math: $('result-math'),
+  series: $('result-series'), main: $('result-main'), menu: $('result-menu'),
 };
+let resultAction = null; // what the main button does
 
-// Add the math score (and the series score) to the final-whistle banner
 function onGameOver() {
+  if (game.ended) return; // count each game once
+  game.ended = true;
   const { home, away } = match.score;
-  const math = player.questions ? `  ·  Math: ${stats.right} of ${stats.total} right` : '';
-  if (!series) {
-    match.setBanner(match.banner.title, `${home} – ${away}${math}  ·  Tap to continue`);
-    return;
+  const won = home > away;
+  let title = won ? 'YOU WIN!' : 'TOO BAD!';
+  let seriesText = '';
+  let mainLabel = won ? 'Play Again' : 'Try Again';
+  resultAction = () => startLevel(series ? series.level : currentLevel);
+
+  if (series) {
+    series.wins[won ? 'home' : 'away']++;
+    const { home: s, away: e } = series.wins;
+    if (Math.max(s, e) >= 2) {
+      series.done = true;
+      title = won ? 'CHAMPIONS! 🏆' : 'TOO BAD!';
+      seriesText = won ? `The Sharks win the Championship ${s}–${e}!` : `The Eagles win the Championship ${e}–${s}.`;
+    } else {
+      seriesText = s === e ? `The series is tied ${s}–${e}. On to Game ${series.game + 1}!`
+        : s > e ? `Sharks lead the series ${s}–${e}` : `Eagles lead the series ${e}–${s}`;
+      mainLabel = `Next Game ▶`;
+      resultAction = nextSeriesGame;
+    }
   }
-  const winner = home > away ? 'home' : 'away';
-  series.wins[winner]++;
-  const s = `Series ${series.wins.home} – ${series.wins.away}`;
-  if (series.wins[winner] >= 2) {
-    series.done = true;
-    const name = winner === 'home' ? HOME.name : match.players.find(p => p.team !== HOME).team.name;
-    match.setBanner(`${name} WIN THE CHAMPIONSHIP! 🏆`, `${s}${math}  ·  Tap to continue`);
-  } else {
-    match.setBanner(match.banner.title, `${s}${math}  ·  Tap for Game ${series.game + 1}`);
+
+  match.banner = null;
+  result.el.classList.toggle('won', won);
+  result.title.textContent = title;
+  result.score.textContent = `Sharks ${home} – ${away} Eagles`;
+  result.math.textContent = player.questions ? `Math: ${stats.right} of ${stats.total} right${stats.total && stats.right === stats.total ? ' ⭐' : ''}` : '';
+  result.math.hidden = !player.questions;
+  result.series.textContent = seriesText;
+  result.series.hidden = !seriesText;
+  result.main.textContent = mainLabel;
+  result.el.hidden = false;
+  if (won) startFireworks(series && series.done ? 2 : 1);
+}
+
+function closeResult(action) {
+  result.el.hidden = true;
+  stopFireworks();
+  action();
+}
+result.main.addEventListener('click', () => closeResult(resultAction));
+result.menu.addEventListener('click', () => closeResult(() => { series = null; match.toMenu(); }));
+window.addEventListener('keydown', e => {
+  if (result.el.hidden || e.code !== 'Enter') return;
+  e.preventDefault();
+  closeResult(resultAction);
+});
+
+// Fireworks: bursts of sparks in Sharks colours that rise, spread, fall and fade
+const fw = { canvas: $('fireworks'), sparks: [], running: false, next: 0, rate: 1 };
+const FW_COLOURS = ['#6cc4ee', '#ffffff', '#fdd835', '#0b2a4a', '#9be3ff', '#ffb300'];
+
+function startFireworks(rate) {
+  Object.assign(fw, { sparks: [], running: true, next: 0, rate, last: performance.now() });
+  fw.canvas.hidden = false;
+  requestAnimationFrame(fireworksFrame);
+}
+
+function stopFireworks() {
+  fw.running = false;
+  fw.canvas.hidden = true;
+}
+
+function fireworksFrame(now) {
+  if (!fw.running) return;
+  const c = fw.canvas, g = c.getContext('2d');
+  const w = c.width = c.clientWidth * devicePixelRatio, h = c.height = c.clientHeight * devicePixelRatio;
+  const dt = Math.min((now - fw.last) / 1000, 0.05);
+  fw.last = now;
+  fw.next -= dt;
+  if (fw.next <= 0) { // a new burst
+    fw.next = (0.35 + Math.random() * 0.4) / fw.rate;
+    const x = w * (0.15 + Math.random() * 0.7), y = h * (0.12 + Math.random() * 0.35);
+    const colour = FW_COLOURS[(Math.random() * FW_COLOURS.length) | 0];
+    const n = 50 + ((Math.random() * 30) | 0), speed = h * (0.25 + Math.random() * 0.15);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2, s = speed * (0.6 + Math.random() * 0.4);
+      fw.sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, colour });
+    }
   }
+  g.clearRect(0, 0, w, h);
+  for (const p of fw.sparks) {
+    p.vy += h * 0.35 * dt; // gravity
+    p.vx *= 0.985; p.vy *= 0.985;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt * 0.7;
+    g.globalAlpha = Math.max(0, p.life);
+    g.fillStyle = p.colour;
+    g.beginPath(); g.arc(p.x, p.y, 2.2 * devicePixelRatio, 0, Math.PI * 2); g.fill();
+  }
+  g.globalAlpha = 1;
+  fw.sparks = fw.sparks.filter(p => p.life > 0);
+  requestAnimationFrame(fireworksFrame);
 }
 
 // ---------- Start menu: pick a season (difficulty) ----------
@@ -348,3 +431,6 @@ function frame(now) {
   }
 }
 requestAnimationFrame(frame);
+
+// More handles for testing from the browser console
+Object.assign(window.game, { startLevel, onGameOver, levels: LEVELS });

@@ -93,19 +93,9 @@ export class Match {
   }
 
   // ---------- Match flow ----------
-  // After the final whistle, a tap goes back to the menu
-  canContinue() {
-    return this.state === 'over' && this.t >= this.stateUntil;
-  }
-
   toMenu() {
     this.state = 'menu';
     this.banner = null;
-  }
-
-  // Tap after the final whistle: the menu code can override this (e.g. the next Championship game)
-  continue() {
-    if (this.onContinue) this.onContinue(); else this.toMenu();
   }
 
   startMatch(level) {
@@ -147,9 +137,8 @@ export class Match {
     for (const p of this.players) { p.vx = 0; p.vy = 0; }
     const { home, away } = this.score;
     if (home >= WIN_GOALS || away >= WIN_GOALS) {
-      this.state = 'over';
-      this.stateUntil = this.t + 1.5;
-      this.setBanner(`${team.name} WIN!`, `${home} – ${away}   ·   Tap to continue`);
+      this.state = 'over'; // the menu code shows the result screen
+      this.banner = null;
     } else {
       this.state = 'goal';
       this.stateUntil = this.t + 2.2;
