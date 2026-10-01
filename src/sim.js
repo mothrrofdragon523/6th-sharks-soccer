@@ -242,7 +242,7 @@ export class Match {
     const gx = oppGoalX(p.team);
     const ty = clamp(aimY, -1, 1) * GOAL_HALF * (scores ? 0.7 : 0.5);
     const dx = gx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
-    const speed = clamp(d * 1.1 + 500, 700, 1300);
+    const speed = clamp(d * 0.5 + 380, 480, 700); // about 24–35 m/s
     // Pick the lift so the ball crosses the goal line at the height we want:
     // under the bar for a goal, well over it for a miss.
     const T = d / speed;
@@ -317,9 +317,11 @@ export class Match {
   }
 
   passTo(p, mate) {
-    const tx = mate.x + mate.vx * 0.3, ty = mate.y + mate.vy * 0.3;
+    // Lead the receiver a little, and kick just hard enough to arrive at a trappable pace
+    // (rolling friction takes off about 0.5 × the distance in speed along the way).
+    const tx = mate.x + mate.vx * 0.45, ty = mate.y + mate.vy * 0.45;
     const d = Math.hypot(tx - p.x, ty - p.y);
-    this.kick(p, tx - p.x, ty - p.y, clamp(d * 1.2 + 250, 360, 900));
+    this.kick(p, tx - p.x, ty - p.y, clamp(d * 0.55 + 110, 200, 520));
     this.ball.passTarget = mate;
     this.ball.passUntil = this.t + 1.6;
   }
@@ -330,7 +332,7 @@ export class Match {
     let a = Math.atan2(ty - p.y, gx - p.x);
     a += (Math.random() - 0.5) * (0.05 + power * power * 0.12); // full power is a little less accurate
     // More power = more lift, so a full-power blast from close range can sail over the bar.
-    this.kick(p, Math.cos(a), Math.sin(a), 520 + power * 650, 30 + power ** 3 * 170);
+    this.kick(p, Math.cos(a), Math.sin(a), 360 + power * 360, 30 + power ** 3 * 130); // about 18–36 m/s
   }
 
   steal(p) {
@@ -598,7 +600,7 @@ export class Match {
         }
       }
       if (!b.scripted) { // a scripted shot keeps its pace all the way to the goal
-        const f = Math.pow(b.z > 0 ? 0.85 : 0.45, dt);
+        const f = Math.pow(b.z > 0 ? 0.85 : 0.6, dt); // rolling keeps 60% of its speed each second
         b.vx *= f;
         b.vy *= f;
       }
@@ -649,9 +651,9 @@ export class Match {
     }
     if (!best) return;
     if (best.role === 'gk') {
-      if (Math.random() < (speed > 850 ? 0.6 : 0.95)) this.setOwner(best);
+      if (Math.random() < (speed > 600 ? 0.6 : 0.95)) this.setOwner(best);
       else this.deflect(best);
-    } else if (speed > 760 && b.lastTouch && b.lastTouch.team !== best.team) {
+    } else if (speed > 480 && b.lastTouch && b.lastTouch.team !== best.team) {
       this.deflect(best); // a hard shot gets blocked, not trapped
     } else {
       this.setOwner(best);
