@@ -143,9 +143,9 @@ export const CHAMPIONSHIP = {
 // Times Tables: every fact from 3 × 3 to 12 × 12, built here rather than written out.
 // Plain facts (7 × 8 = ?) are typed in with no choices shown, so he has to recall them.
 // Missing-factor facts (? × 7 = 56) stay multiple choice, and only use the 6s to 12s.
-// Easy is the 3, 4, 5 and 10 tables; medium the 6, 7, 8 and 9 tables; hard is an even split
-// between the 11 and 12 tables and the missing-factor facts. The missing-factor wrong answers
-// are near misses.
+// Easy is the 3, 4, 5 and 10 tables; medium the 6, 7, 8 and 9 tables; hard the 11 and 12
+// tables. Each table's missing-factor facts come up at the same level as its plain facts.
+// The missing-factor wrong answers are near misses.
 const fact = (a, b) => ({
   skill: `${b} times table`,
   q: `${a} × ${b} = ?`,
@@ -167,10 +167,9 @@ const tables = (ts, make = fact) => ts.flatMap(t => Array.from({ length: 10 }, (
 export const TIMES_TABLES = {
   name: 'Times Tables',
   blurb: 'Multiplication facts from 3 × 3 to 12 × 12',
-  easy: tables([3, 4, 5, 10]),
-  medium: tables([6, 7, 8, 9]),
-  // Two pools, picked from equally often (there are far more missing-factor facts)
-  hard: { split: [tables([11, 12]), tables([6, 7, 8, 9, 10, 11, 12], missingFactor)] },
+  easy: [...tables([3, 4, 5, 10]), ...tables([10], missingFactor)],
+  medium: [...tables([6, 7, 8, 9]), ...tables([6, 7, 8, 9], missingFactor)],
+  hard: [...tables([11, 12]), ...tables([11, 12], missingFactor)],
 };
 
 // Every question set, by name.
@@ -189,8 +188,7 @@ const shuffle = list => {
 };
 
 // One per game, for the mode he picked, e.g. new QuestionDeck(MODES.semiFinal).
-// Never repeats a question until that level runs out. A level can be { split: [pool, pool] }
-// to pick from each pool equally often, whatever their sizes.
+// Never repeats a question until that level runs out.
 export class QuestionDeck {
   constructor(mode) {
     this.mode = mode;
@@ -201,8 +199,7 @@ export class QuestionDeck {
   // typed, why, graph?, level }. Typed questions have no choices: he enters the answer.
   next(leaderGoals) {
     const level = levelFor(leaderGoals);
-    const { split } = this.mode[level];
-    const pool = split ? split[(Math.random() * split.length) | 0] : this.mode[level];
+    const pool = this.mode[level];
     let fresh = pool.filter(item => !this.used.has(item));
     if (!fresh.length) {
       pool.forEach(item => this.used.delete(item));
