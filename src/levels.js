@@ -1,6 +1,6 @@
-// The four difficulty levels shown on the start menu, and which question set each one uses.
+// The options shown on the start menu (four seasons plus Times Tables), and which question set each one uses.
 // (The set names in questions.js differ from the menu names; they're matched here by topic.)
-import { REGULAR_SEASON, SEMI_FINAL, CHAMPIONSHIP } from './questions.js';
+import { REGULAR_SEASON, SEMI_FINAL, CHAMPIONSHIP, TIMES_TABLES } from './questions.js';
 
 export const LEVELS = [
   {
@@ -35,5 +35,13 @@ export const LEVELS = [
     desc: 'A 3 Game Championship Showdown',
     // Best of 3; each game steps up to the next season's questions
     series: [REGULAR_SEASON, SEMI_FINAL, CHAMPIONSHIP],
+  },
+  {
+    id: 'times',
+    name: 'Times Tables',
+    icon: '🔢',
+    color: '#ab47bc',
+    desc: 'Type in the facts from 3 × 3 to 12 × 12: the 3s, 4s, 5s and 10s first, then 6s–9s, then 11s, 12s and missing numbers',
+    questions: TIMES_TABLES,
   },
 ];

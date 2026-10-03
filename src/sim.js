@@ -23,14 +23,15 @@ const RECOVERED_AT = 0.35;    // after running dry, you can sprint again once ba
 
 // Kits. HOME is the team the player controls: Gabe's Sharks (light blue). AWAY is the Eagles
 // (Eagles green), played by the computer for now and by Mom once online play is added.
+// To show a team logo on the ad boards and shirts, add e.g. logo: 'assets/sharks-logo.png'.
 export const HOME = {
-  name: 'SHARKS', dir: 1, logo: 'assets/sharks-logo.png',
+  name: 'SHARKS', dir: 1,
   kit: { shirt: 0x6cc4ee, trim: 0x0b2a4a, number: '#0b2a4a', outline: null, shorts: 0xf2f2f2, socks: 0x6cc4ee, boots: 0x111111 },
   gkKit: { shirt: 0xff8f00, trim: 0x0b2a4a, number: '#0b2a4a', outline: null, shorts: 0x0b2a4a, socks: 0xff8f00, boots: 0x111111, gloves: 0x0b2a4a },
   fans: [0x6cc4ee, 0x6cc4ee, 0x0b2a4a, 0xffffff, 0x6cc4ee, 0x9e9e9e],
 };
 export const AWAY = {
-  name: 'EAGLES', dir: -1, logo: 'assets/eagles-logo.png',
+  name: 'EAGLES', dir: -1,
   kit: { shirt: 0x1f8a80, trim: 0x111111, number: '#ffffff', outline: '#000000', shorts: 0xc4c8cc, socks: 0x1f8a80, boots: 0x111111 },
   gkKit: { shirt: 0x1a1a1a, trim: 0x4cbb17, number: '#4cbb17', outline: '#000000', shorts: 0x1a1a1a, socks: 0x1a1a1a, boots: 0x111111, gloves: 0x4cbb17 },
   fans: [0x1f8a80, 0x1f8a80, 0xf2f2f2, 0x111111, 0xa5acaf, 0x4cbb17],
@@ -212,7 +213,7 @@ export class Match {
 
   // Right answer: the shot goes in. Wrong answer: it sails over the bar.
   answerShot(correct) {
-    const { shooter, aimY } = this.pendingShot;
+    const { shooter, aimY } = this.pendingShot || {}; // no shot waiting: just carry on playing
     this.pendingShot = null;
     this.state = 'play';
     if (this.ball.owner === shooter) this.scriptedShot(shooter, correct, aimY);

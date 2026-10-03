@@ -140,8 +140,41 @@ export const CHAMPIONSHIP = {
   ],
 };
 
-// The three options on the game menu, in order.
-export const MODES = { regularSeason: REGULAR_SEASON, semiFinal: SEMI_FINAL, championship: CHAMPIONSHIP };
+// Times Tables: every fact from 3 × 3 to 12 × 12, built here rather than written out.
+// Plain facts (7 × 8 = ?) are typed in with no choices shown, so he has to recall them.
+// Missing-factor facts (? × 7 = 56) stay multiple choice, and only use the 6s to 12s.
+// Easy is the 3, 4, 5 and 10 tables; medium the 6, 7, 8 and 9 tables; hard is an even split
+// between the 11 and 12 tables and the missing-factor facts. The missing-factor wrong answers
+// are near misses.
+const fact = (a, b) => ({
+  skill: `${b} times table`,
+  q: `${a} × ${b} = ?`,
+  a: String(a * b),
+  typed: true,
+  why: `${a} groups of ${b} make ${a * b}. Check: ${a * b} ÷ ${b} = ${a}.`,
+});
+
+const missingFactor = (a, b) => ({
+  skill: `${b} times table`,
+  q: `? × ${b} = ${a * b}`,
+  a: String(a),
+  wrong: [...new Set([a - 1, a + 1, a + 2, a - 2, b].filter(n => n > 0 && n !== a))].slice(0, 3).map(String),
+  why: `${a * b} ÷ ${b} = ${a}, because ${a} × ${b} = ${a * b}.`,
+});
+
+const tables = (ts, make = fact) => ts.flatMap(t => Array.from({ length: 10 }, (_, i) => make(i + 3, t)));
+
+export const TIMES_TABLES = {
+  name: 'Times Tables',
+  blurb: 'Multiplication facts from 3 × 3 to 12 × 12',
+  easy: tables([3, 4, 5, 10]),
+  medium: tables([6, 7, 8, 9]),
+  // Two pools, picked from equally often (there are far more missing-factor facts)
+  hard: { split: [tables([11, 12]), tables([6, 7, 8, 9, 10, 11, 12], missingFactor)] },
+};
+
+// Every question set, by name.
+export const MODES = { regularSeason: REGULAR_SEASON, semiFinal: SEMI_FINAL, championship: CHAMPIONSHIP, timesTables: TIMES_TABLES };
 
 // Level by how close the leader is to winning (first to 5): 0–1 goals easy, 2–3 medium, 4 hard.
 export const levelFor = leaderGoals => (leaderGoals >= 4 ? 'hard' : leaderGoals >= 2 ? 'medium' : 'easy');
@@ -156,17 +189,20 @@ const shuffle = list => {
 };
 
 // One per game, for the mode he picked, e.g. new QuestionDeck(MODES.semiFinal).
-// Never repeats a question until that level runs out.
+// Never repeats a question until that level runs out. A level can be { split: [pool, pool] }
+// to pick from each pool equally often, whatever their sizes.
 export class QuestionDeck {
   constructor(mode) {
     this.mode = mode;
     this.used = new Set();
   }
 
-  // Returns { q, skill, choices, answer (index into choices), why, graph?, level }
+  // Returns { q, skill, choices, answer (index into choices), rightAnswer (its text),
+  // typed, why, graph?, level }. Typed questions have no choices: he enters the answer.
   next(leaderGoals) {
     const level = levelFor(leaderGoals);
-    const pool = this.mode[level];
+    const { split } = this.mode[level];
+    const pool = split ? split[(Math.random() * split.length) | 0] : this.mode[level];
     let fresh = pool.filter(item => !this.used.has(item));
     if (!fresh.length) {
       pool.forEach(item => this.used.delete(item));
@@ -174,8 +210,8 @@ export class QuestionDeck {
     }
     const item = fresh[(Math.random() * fresh.length) | 0];
     this.used.add(item);
-    const choices = shuffle([item.a, ...item.wrong]);
-    return { q: item.q, skill: item.skill, choices, answer: choices.indexOf(item.a), why: item.why, graph: item.graph, level };
+    const choices = item.typed ? [] : shuffle([item.a, ...item.wrong]);
+    return { q: item.q, skill: item.skill, choices, answer: choices.indexOf(item.a), rightAnswer: item.a, typed: !!item.typed, why: item.why, graph: item.graph, level };
   }
 }
 

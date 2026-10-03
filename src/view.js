@@ -66,9 +66,9 @@ export class View {
     window.addEventListener('resize', () => this.resize());
   }
 
-  // Team logos are optional image files (see README); without them the kits are plain colours.
+  // Team logos are optional (a team's logo path in sim.js); without them the kits are plain colours.
   loadLogos() {
-    const load = src => new Promise(resolve => {
+    const load = src => !src ? Promise.resolve(null) : new Promise(resolve => {
       const img = new Image();
       img.onload = () => resolve(img);
       img.onerror = () => resolve(null);

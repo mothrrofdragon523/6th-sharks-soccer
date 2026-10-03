@@ -26,7 +26,7 @@
     }
     #scene { display: block; position: fixed; inset: 0; }
     /* No double-tap zoom on the menu or question buttons either (taps still work) */
-    button, input, .choice, .level, .who-card { touch-action: manipulation; }
+    button, input, .choice, .pad-key, .level, .who-card { touch-action: manipulation; }
     [hidden] { display: none !important; }
 
     /* Scoreboard, top-left like a TV broadcast */
@@ -243,6 +243,8 @@
       box-shadow: 0 0 18px rgba(253, 216, 53, 0.35);
     }
     .level-championship p { font-weight: bold; font-size: clamp(11px, 3vmin, 17px); }
+    /* Times Tables is its own kind of game, so it gets a full-width row under the seasons */
+    .level-times { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: clamp(8px, 2vmin, 16px); }
     @media (max-width: 560px) { #levels { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     #levels[hidden] { display: none; }
 
@@ -375,6 +377,34 @@
     .choice.right .key { background: #2e7d32; }
     .choice.wrong { opacity: 1; border-color: #c62828; background: #ffebee; }
     .choice.wrong .key { background: #c62828; }
+    /* Typed answers: the number he's entering, over a phone-style number pad */
+    #quiz.typed #quiz-q { text-align: center; font-size: clamp(22px, 6.5vmin, 36px); }
+    #quiz.typed #quiz-choices { display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 1.5vmin, 10px); }
+    .entry {
+      min-width: 4ch;
+      padding: 4px 16px;
+      text-align: center;
+      font: bold clamp(24px, 7vmin, 40px)/1.2 Arial, sans-serif;
+      background: #fff;
+      border: 3px solid #004c54;
+      border-radius: 10px;
+    }
+    .entry.right { color: #2e7d32; border-color: #2e7d32; background: #e8f5e9; }
+    .entry.wrong { color: #c62828; border-color: #c62828; background: #ffebee; }
+    .pad { display: grid; grid-template-columns: repeat(3, clamp(54px, 15vmin, 84px)); gap: clamp(5px, 1.2vmin, 8px); }
+    .pad-key {
+      height: clamp(36px, 9vmin, 54px);
+      font: bold clamp(16px, 4.4vmin, 24px) Arial, sans-serif;
+      color: #1a1a1a;
+      background: #fff;
+      border: 2px solid #cfd8dc;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .pad-key:active:not(:disabled) { background: #e0f2f1; }
+    .pad-key.erase { background: #eceff1; }
+    .pad-key.enter { color: #fff; background: #004c54; border-color: #004c54; }
+    .pad-key:disabled { opacity: 0.45; cursor: default; }
     #quiz-result {
       display: flex;
       align-items: center;
@@ -506,7 +536,7 @@
 <body>
   <canvas id="scene"></canvas>
 
-  <div id="scoreboard"><span class="home"><img class="logo" src="assets/sharks-logo.png" alt="" onerror="this.remove()">SHARKS</span><span id="score">0 – 0</span><span class="away">EAGLES<img class="logo" src="assets/eagles-logo.png" alt="" onerror="this.remove()"></span></div>
+  <div id="scoreboard"><span class="home">SHARKS</span><span id="score">0 – 0</span><span class="away">EAGLES</span></div>
   <div id="rule">First to 5</div>
   <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
   <div id="toast" hidden></div>

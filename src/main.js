@@ -254,12 +254,12 @@ const quiz = {
   choices: $('quiz-choices'), result: $('quiz-result'), verdict: $('quiz-verdict'),
   why: $('quiz-why'), go: $('quiz-go'),
 };
-let current = null; // { question, correct: null | boolean }
+let current = null; // { question, correct: null | boolean, typed: digits entered so far }
 
 function askQuestion() {
   input.releaseAll();
   const question = deck.next(Math.max(match.score.home, match.score.away));
-  current = { question, correct: null };
+  current = { question, correct: null, typed: '' };
   quiz.el.hidden = false;
   quiz.el.classList.toggle('has-graph', !!question.graph);
   quiz.q.textContent = question.q;
@@ -268,6 +268,8 @@ function askQuestion() {
   quiz.graph.hidden = !question.graph;
   if (question.graph) drawGraph(quiz.graph, question.graph);
   quiz.result.hidden = true;
+  quiz.el.classList.toggle('typed', question.typed);
+  if (question.typed) { showNumberPad(); return; }
   quiz.choices.replaceChildren(...question.choices.map((text, i) => {
     const b = document.createElement('button');
     b.className = 'choice';
@@ -279,10 +281,68 @@ function askQuestion() {
   }));
 }
 
+// Typed answers (Times Tables facts): an on-screen number pad, so no choices give the answer away
+// and the iPad keyboard doesn't pop up over the game. A keyboard's number keys work too.
+function showNumberPad() {
+  const entry = document.createElement('div');
+  entry.className = 'entry';
+  const key = (label, press, cls = '') => {
+    const b = document.createElement('button');
+    b.className = `pad-key ${cls}`;
+    b.textContent = label;
+    b.addEventListener('click', press);
+    return b;
+  };
+  const pad = document.createElement('div');
+  pad.className = 'pad';
+  pad.append(
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => key(n, () => typeDigit(n))),
+    key('⌫', eraseDigit, 'erase'), key(0, () => typeDigit(0)), key('✓', submitTyped, 'enter'),
+  );
+  quiz.choices.replaceChildren(entry, pad);
+  showTyped();
+}
+
+function showTyped() {
+  quiz.choices.querySelector('.entry').textContent = current.typed || '?';
+  quiz.choices.querySelector('.enter').disabled = !current.typed;
+}
+
+function typeDigit(n) {
+  if (!current || current.correct !== null || current.typed.length >= 3) return; // 12 × 12 = 144 is the biggest
+  current.typed = current.typed === '0' ? String(n) : current.typed + n;
+  showTyped();
+}
+
+function eraseDigit() {
+  if (!current || current.correct !== null) return;
+  current.typed = current.typed.slice(0, -1);
+  showTyped();
+}
+
+function submitTyped() {
+  if (!current || current.correct !== null || !current.typed) return;
+  const right = current.typed === current.question.rightAnswer;
+  quiz.choices.querySelector('.entry').classList.add(right ? 'right' : 'wrong');
+  quiz.choices.querySelectorAll('.pad-key').forEach(b => { b.disabled = true; });
+  record(current.typed);
+}
+
 function answer(i) {
   if (!current || current.correct !== null) return;
   const { question } = current;
-  current.correct = i === question.answer;
+  [...quiz.choices.children].forEach((b, k) => {
+    b.disabled = true;
+    if (k === question.answer) b.classList.add('right');
+    else if (k === i) b.classList.add('wrong');
+  });
+  record(question.choices[i]);
+}
+
+// Score, log and explain an answer, whether it was picked or typed.
+function record(given) {
+  const { question } = current;
+  current.correct = given === question.rightAnswer;
   stats.total++;
   if (current.correct) stats.right++;
   logAnswer({
@@ -290,16 +350,11 @@ function answer(i) {
     level: question.level,
     skill: question.skill,
     question: question.q,
-    answer: question.choices[i],
-    correctAnswer: question.choices[question.answer],
+    answer: given,
+    correctAnswer: question.rightAnswer,
     right: current.correct,
   });
-  [...quiz.choices.children].forEach((b, k) => {
-    b.disabled = true;
-    if (k === question.answer) b.classList.add('right');
-    else if (k === i) b.classList.add('wrong');
-  });
-  quiz.verdict.textContent = current.correct ? 'Correct! ⚽' : `Not quite. It's ${question.choices[question.answer]}.`;
+  quiz.verdict.textContent = current.correct ? 'Correct! ⚽' : `Not quite. It's ${question.rightAnswer}.`;
   quiz.verdict.className = current.correct ? 'yes' : 'no';
   quiz.why.textContent = question.why;
   quiz.go.textContent = current.correct ? 'SHOOT! ⚽' : 'Take the shot';
@@ -317,9 +372,18 @@ function takeShot() {
 quiz.go.addEventListener('click', takeShot);
 window.addEventListener('keydown', e => {
   if (!current) return;
+  if (current.correct !== null) {
+    if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat) { e.preventDefault(); takeShot(); }
+    return;
+  }
+  if (current.question.typed) {
+    if (/^[0-9]$/.test(e.key)) typeDigit(Number(e.key));
+    else if (e.code === 'Backspace') eraseDigit();
+    else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) { e.preventDefault(); submitTyped(); }
+    return;
+  }
   const i = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'KeyA', 'KeyB', 'KeyC', 'KeyD'].indexOf(e.code) % 4;
-  if (current.correct === null && i >= 0 && !e.repeat) answer(i);
-  else if (current.correct !== null && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); takeShot(); }
+  if (i >= 0 && !e.repeat) answer(i);
 });
 const hud = {
   score: $('score'),
