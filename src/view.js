@@ -22,6 +22,8 @@ const LOOKS = [
   { skin: 0x7a4a2a, hair: 0x141414, style: 'curly', skinTint: 0x86583a, hairTint: 0x201818 },
 ];
 const SKINS = LOOKS.map(l => l.skin);
+// Each team gets every look once, shifted so the two teams' same numbers don't look alike.
+const lookFor = i => LOOKS[(i + 3 * Math.floor(i / LOOKS.length)) % LOOKS.length];
 const pick = list => list[(Math.random() * list.length) | 0];
 
 function canvasTexture(canvas, repeatX = 1, repeatY = 1) {
@@ -53,7 +55,7 @@ export class View {
     this.buildBoards();
     this.buildStands();
     // Simple figures show straight away; the realistic Mixamo players replace them once loaded.
-    this.playerViews = match.players.map((p, i) => this.buildPlayer(p, LOOKS[i % LOOKS.length]));
+    this.playerViews = match.players.map((p, i) => this.buildPlayer(p, lookFor(i)));
     this.buildBall();
     this.buildMarker();
 
@@ -119,7 +121,7 @@ export class View {
     this.match.players.forEach((p, i) => {
       const v = this.playerViews[i];
       const kit = p.role === 'gk' ? p.team.gkKit : p.team.kit;
-      const model = makeModel(assets, kit, kitFor(kit), LOOKS[i % LOOKS.length]);
+      const model = makeModel(assets, kit, kitFor(kit), lookFor(i));
       const number = model.getObjectByName('number');
       number.material.map = this.numberTexture(p.num, kit);
       v.modelBadge = model.getObjectByName('badge');

@@ -12,14 +12,15 @@ const view = new View($('scene'), match);
 const input = new Input(match);
 window.game = { match, view }; // handy for poking at the game from the browser console
 
-// Kit check: open the game with ?kits in the address to line all 8 players up close to the
-// camera (Sharks goalie, Sharks 4, 7, 10, then the same for the Eagles), for checking how
+// Kit check: open the game with ?kits in the address to line all 16 players up close to the
+// camera (the Sharks in front, the Eagles in a staggered row behind), for checking how
 // the kits look on a particular phone or tablet.
 if (new URLSearchParams(location.search).has('kits')) {
   view.ready.then(() => {
     match.state = 'kitcheck';
     match.players.forEach((p, i) => {
-      Object.assign(p, { x: (i - 3.5) * 22, y: 0, vx: 0, vy: 0, angle: Math.PI / 2 }); // facing the camera
+      const row = Math.floor(i / 8);
+      Object.assign(p, { x: (i % 8 - 3.5 + row * 0.5) * 22, y: -row * 40, vx: 0, vy: 0, angle: Math.PI / 2 }); // facing the camera
     });
     match.ball.owner = null;
     Object.assign(match.ball, { x: 0, y: 250, vx: 0, vy: 0 });

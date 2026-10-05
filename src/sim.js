@@ -37,12 +37,17 @@ export const AWAY = {
   fans: [0x1f8a80, 0x1f8a80, 0xf2f2f2, 0x111111, 0xa5acaf, 0x4cbb17],
 };
 
-// Home team layout (attacking right). The away team is mirrored.
+// Home team layout (attacking right): a keeper, 3 defenders, 3 midfielders and 1 forward.
+// The away team is mirrored.
 const FORMATION = [
   { role: 'gk', num: 1, x: F.left + 28, y: 0 },
-  { role: 'def', num: 4, x: -560, y: 0 },
-  { role: 'fw', num: 7, x: -300, y: -260 },
-  { role: 'fw', num: 10, x: -240, y: 220 },
+  { role: 'def', num: 2, x: -600, y: -280 },
+  { role: 'def', num: 4, x: -640, y: 0 },
+  { role: 'def', num: 3, x: -600, y: 280 },
+  { role: 'mid', num: 7, x: -330, y: -300 },
+  { role: 'mid', num: 10, x: -370, y: 0 },
+  { role: 'mid', num: 11, x: -330, y: 300 },
+  { role: 'fw', num: 9, x: -150, y: 0 },
 ];
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -115,7 +120,7 @@ export class Match {
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
     }
-    const kicker = this.teams.get(team).find(p => p.num === 10);
+    const kicker = this.teams.get(team).find(p => p.role === 'fw');
     kicker.x = -team.dir * (PLAYER_R + BALL_R + 2);
     kicker.y = 0;
 
@@ -433,11 +438,18 @@ export class Match {
     const b = this.ball, dir = p.team.dir;
     let x, y;
     if (p.role === 'def') {
-      x = b.x - dir * 320;
-      y = b.y * 0.3;
-    } else {
-      x = b.x + dir * (p.num === 7 ? 300 : 200);
+      // Stay back as a line behind the ball, but no further up than the halfway line.
+      x = b.x - dir * 380;
+      x = dir === 1 ? Math.min(x, 0) : Math.max(x, 0);
+      y = p.homeY * 0.8 + b.y * 0.3;
+    } else if (p.role === 'mid') {
+      // Keep level with the ball in their lane, the middle one a step behind.
+      x = b.x + dir * (p.homeY === 0 ? -60 : 80);
       y = p.homeY + b.y * 0.25;
+    } else {
+      // The forward runs ahead to give a target up front.
+      x = b.x + dir * 320;
+      y = b.y * 0.3;
     }
     return [clamp(x, F.left + 80, F.right - 80), clamp(y, F.top + 40, F.bottom - 40)];
   }
@@ -447,11 +459,15 @@ export class Match {
     let x, y;
     if (p.role === 'def') {
       x = gx + dir * Math.max(220, Math.abs(b.x - gx) * 0.4);
-      y = b.y * 0.5;
-    } else {
+      y = p.homeY * 0.6 + b.y * 0.4;
+    } else if (p.role === 'mid') {
       x = b.x - dir * 180;
       x = dir === 1 ? Math.max(x, F.left + 320) : Math.min(x, F.right - 320);
       y = p.homeY + b.y * 0.4;
+    } else {
+      // The forward hangs around halfway, ready for a counter-attack.
+      x = b.x * 0.4 + dir * 120;
+      y = b.y * 0.3;
     }
     return [clamp(x, F.left + 40, F.right - 40), clamp(y, F.top + 40, F.bottom - 40)];
   }
