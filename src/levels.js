@@ -1,6 +1,7 @@
-// The options shown on the start menu (four seasons plus Times Tables), and which question set each one uses.
+// The options shown on the start menu (four seasons, Times Tables and Homework), and which question set each one uses.
 // (The set names in questions.js differ from the menu names; they're matched here by topic.)
 import { REGULAR_SEASON, SEMI_FINAL, CHAMPIONSHIP, TIMES_TABLES } from './questions.js';
+import { HOMEWORK } from './homework.js';
 
 export const LEVELS = [
   {
@@ -43,5 +44,16 @@ export const LEVELS = [
     color: '#ab47bc',
     desc: 'Type in the facts from 3 × 3 to 12 × 12: the 3s, 4s, 5s and 10s first, then 6s–9s, then 11s and 12s, plus missing numbers from the 6s up',
     questions: TIMES_TABLES,
+  },
+  {
+    id: 'homework',
+    name: 'Homework',
+    icon: '📚',
+    color: '#26a69a',
+    desc: HOMEWORK.problems.length
+      ? `${HOMEWORK.title}: ${HOMEWORK.problems.length} problems from this week's homework, with 3 tries each`
+      : 'No homework loaded yet',
+    questions: HOMEWORK,
+    homework: HOMEWORK,
   },
 ];

@@ -178,6 +178,14 @@ export const MODES = { regularSeason: REGULAR_SEASON, semiFinal: SEMI_FINAL, cha
 // Level by how close the leader is to winning (first to 5): 0–1 goals easy, 2–3 medium, 4 hard.
 export const levelFor = leaderGoals => (leaderGoals >= 4 ? 'hard' : leaderGoals >= 2 ? 'medium' : 'easy');
 
+// Does a typed answer match? Commas and spaces don't matter, and 4.50 matches 4.5.
+// Fractions have to match as written (so 2/4 doesn't count for 1/2).
+export const sameAnswer = (given, right) => {
+  const tidy = s => String(s).replace(/[,\s$]/g, '');
+  const g = tidy(given), r = tidy(right);
+  return g === r || (/^\d*\.?\d+$/.test(g) && /^\d*\.?\d+$/.test(r) && Number(g) === Number(r));
+};
+
 const shuffle = list => {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {

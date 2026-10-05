@@ -243,8 +243,8 @@
       box-shadow: 0 0 18px rgba(253, 216, 53, 0.35);
     }
     .level-championship p { font-weight: bold; font-size: clamp(11px, 3vmin, 17px); }
-    /* Times Tables is its own kind of game, so it gets a full-width row under the seasons */
-    .level-times { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: clamp(8px, 2vmin, 16px); }
+    /* Times Tables and Homework are their own kinds of game, so they get full-width rows under the seasons */
+    .level-times, .level-homework { grid-column: 1 / -1; flex-direction: row; align-items: center; gap: clamp(8px, 2vmin, 16px); }
     @media (max-width: 560px) { #levels { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     #levels[hidden] { display: none; }
 
@@ -340,6 +340,7 @@
     .lvl-easy { background: #43a047; }
     .lvl-medium { background: #fb8c00; }
     .lvl-hard { background: #e53935; }
+    .lvl-homework { background: #26a69a; font-size: 13px !important; }
     .quiz-body { display: flex; flex-direction: column; gap: clamp(6px, 1.8vmin, 12px); }
     #quiz.has-graph .quiz-body { display: grid; grid-template-columns: 1.1fr 1fr; align-items: start; }
     #quiz-q { margin: 0; font: bold clamp(15px, 4.2vmin, 24px)/1.3 Arial, sans-serif; }
@@ -404,6 +405,7 @@
     .pad-key:active:not(:disabled) { background: #e0f2f1; }
     .pad-key.erase { background: #eceff1; }
     .pad-key.enter { color: #fff; background: #004c54; border-color: #004c54; }
+    .pad-key.wide { grid-column: span 2; }
     .pad-key:disabled { opacity: 0.45; cursor: default; }
     #quiz-result {
       display: flex;
@@ -414,6 +416,7 @@
     #quiz-result > div { flex: 1; }
     #quiz-verdict.yes { color: #2e7d32; }
     #quiz-verdict.no { color: #c62828; }
+    #quiz-go[hidden] { display: none; }
     #quiz-go {
       flex: none;
       padding: clamp(8px, 2.4vmin, 14px) clamp(14px, 4vmin, 24px);
@@ -467,7 +470,7 @@
     #result-math { font: bold clamp(13px, 3.6vmin, 18px) Arial, sans-serif; color: #9be3ff; }
     #result-series { font: bold clamp(13px, 3.6vmin, 18px) Arial, sans-serif; color: #fdd835; }
     .result-buttons { display: flex; gap: 12px; margin-top: clamp(4px, 2vmin, 12px); flex-wrap: wrap; justify-content: center; }
-    #result-main, #result-menu {
+    #result-main, #result-menu, #result-review {
       padding: clamp(10px, 2.8vmin, 16px) clamp(18px, 5vmin, 30px);
       font: clamp(15px, 4.2vmin, 22px) 'Arial Black', Arial, sans-serif;
       border-radius: 12px;
@@ -475,6 +478,71 @@
     }
     #result-main { color: #0b2a4a; background: #6cc4ee; border: none; }
     #result-menu { color: #fff; background: transparent; border: 2px solid rgba(255, 255, 255, 0.6); }
+    #result-review { flex-basis: 100%; color: #fff; background: #26a69a; border: none; }
+    #result-review[hidden] { display: none; }
+
+    /* Homework answers: every problem, to scroll through while finishing the paper copy */
+    #review {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+               max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      box-sizing: border-box;
+      background: rgba(0, 0, 0, 0.6);
+    }
+    #review[hidden] { display: none; }
+    .review-card {
+      position: relative;
+      width: min(760px, 100%);
+      max-height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+      box-sizing: border-box;
+      padding: 0 clamp(12px, 3vmin, 22px) clamp(12px, 3vmin, 22px);
+      background: #fdfdf8;
+      color: #1a1a1a;
+      border-radius: 14px;
+      border-top: 6px solid #26a69a;
+    }
+    .review-head {
+      position: sticky;
+      top: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: clamp(10px, 2.4vmin, 16px) 0;
+      background: #fdfdf8;
+      border-bottom: 2px solid #e0e0e0;
+    }
+    .review-head h2 { margin: 0; font-size: clamp(16px, 4.4vmin, 24px); color: #00695c; }
+    #review-close {
+      flex: none;
+      padding: 8px 18px;
+      font: bold clamp(14px, 3.8vmin, 18px) Arial, sans-serif;
+      color: #fff;
+      background: #26a69a;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    #review-list { list-style: none; margin: 0; padding: 0; }
+    #review-list li { padding: clamp(8px, 2vmin, 14px) 0; border-bottom: 1px solid #e6e6e6; }
+    #review-list p { margin: 4px 0 0; font: clamp(14px, 3.8vmin, 19px)/1.35 Arial, sans-serif; }
+    #review-list .q { font-weight: bold; }
+    #review-list .a strong { color: #00695c; font-size: 1.1em; }
+    #review-list .why { font-size: clamp(12px, 3.2vmin, 15px); color: #555; }
+    .review-top { display: flex; align-items: center; gap: 10px; }
+    .review-top .num { font: bold clamp(16px, 4.4vmin, 22px) 'Arial Black', Arial, sans-serif; color: #00695c; }
+    .review-top .chip { font: bold 12px Arial, sans-serif; padding: 3px 9px; border-radius: 10px; color: #fff; background: #90a4ae; }
+    .review-top .chip.first { background: #f9a825; }
+    .review-top .chip.solved { background: #43a047; }
+    .review-top .chip.shown { background: #e53935; }
 
     #error-box {
       position: fixed;
@@ -597,7 +665,15 @@
       <div class="result-buttons">
         <button id="result-main"></button>
         <button id="result-menu">Main Menu</button>
+        <button id="result-review" hidden>📋 Homework Answers</button>
       </div>
+    </div>
+  </div>
+
+  <div id="review" hidden>
+    <div class="review-card">
+      <div class="review-head"><h2>📋 <span id="review-title"></span></h2><button id="review-close">Done</button></div>
+      <ol id="review-list"></ol>
     </div>
   </div>
 

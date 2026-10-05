@@ -2,7 +2,8 @@ import { Match } from './sim.js';
 import { View } from './view.js';
 import { Input } from './input.js';
 import { LEVELS } from './levels.js';
-import { QuestionDeck, drawGraph } from './questions.js';
+import { QuestionDeck, drawGraph, sameAnswer } from './questions.js';
+import { HomeworkDeck } from './homework.js';
 import { logAnswer, flush as flushLog } from './log.js';
 import { PLAYERS, pinMatches, savedPlayer, savePlayer } from './player.js';
 
@@ -45,7 +46,7 @@ let currentLevel = null;
 
 function beginGame(level, questionSet, label) {
   currentLevel = level;
-  deck = new QuestionDeck(questionSet);
+  deck = level.homework ? new HomeworkDeck(level.homework) : new QuestionDeck(questionSet);
   stats = { right: 0, total: 0 };
   game = {
     player: player.name,
@@ -78,7 +79,7 @@ function nextSeriesGame() {
 // It waits for a button press, so a stray tap at the final whistle can't skip it.
 const result = {
   el: $('result'), title: $('result-title'), score: $('result-score'), math: $('result-math'),
-  series: $('result-series'), main: $('result-main'), menu: $('result-menu'),
+  series: $('result-series'), main: $('result-main'), menu: $('result-menu'), review: $('result-review'),
 };
 let resultAction = null; // what the main button does
 
@@ -116,6 +117,7 @@ function onGameOver() {
   result.series.textContent = seriesText;
   result.series.hidden = !seriesText;
   result.main.textContent = mainLabel;
+  result.review.hidden = !currentLevel.homework;
   result.el.hidden = false;
   if (won) startFireworks(series && series.done ? 2 : 1);
 }
@@ -128,10 +130,40 @@ function closeResult(action) {
 result.main.addEventListener('click', () => closeResult(resultAction));
 result.menu.addEventListener('click', () => closeResult(() => { series = null; match.toMenu(); }));
 window.addEventListener('keydown', e => {
-  if (result.el.hidden || e.code !== 'Enter') return;
+  if (result.el.hidden || !review.el.hidden || e.code !== 'Enter') return;
   e.preventDefault();
   closeResult(resultAction);
 });
+
+// ---------- Homework answers: every problem on the worksheet, to finish the paper copy ----------
+const review = { el: $('review'), title: $('review-title'), list: $('review-list') };
+const REVIEW_STATUS = {
+  first: ['⭐ First try', 'first'],
+  solved: ['✓ Got it', 'solved'],
+  shown: ['Answer shown', 'shown'],
+};
+
+function showReview() {
+  const { homework } = currentLevel;
+  review.title.textContent = homework.title;
+  review.list.replaceChildren(...homework.problems.map(p => {
+    const li = document.createElement('li');
+    const [label, cls] = REVIEW_STATUS[deck.status(p.n)] || ['Not asked yet', 'none'];
+    li.innerHTML = '<div class="review-top"><strong class="num"></strong><span class="chip"></span></div>'
+      + '<p class="q"></p><p class="a">Answer: <strong></strong></p><p class="why"></p>';
+    li.querySelector('.num').textContent = `#${p.n}`;
+    li.querySelector('.chip').textContent = label;
+    li.querySelector('.chip').classList.add(cls);
+    li.querySelector('.q').textContent = p.q;
+    li.querySelector('.a strong').textContent = p.a;
+    li.querySelector('.why').textContent = p.why;
+    return li;
+  }));
+  review.el.hidden = false;
+  review.el.querySelector('.review-card').scrollTop = 0;
+}
+result.review.addEventListener('click', showReview);
+$('review-close').addEventListener('click', () => { review.el.hidden = true; });
 
 // Fireworks: bursts of sparks in Sharks colours that rise, spread, fall and fade
 const fw = { canvas: $('fireworks'), sparks: [], running: false, next: 0, rate: 1 };
@@ -188,6 +220,7 @@ for (const level of LEVELS) {
   card.className = `level level-${level.id}`;
   card.style.setProperty('--c', level.color);
   card.disabled = true;
+  card.dataset.empty = level.homework && !level.homework.problems.length ? '1' : '';
   card.innerHTML = `<span class="icon">${level.icon}</span><h2></h2><p></p>`;
   card.querySelector('h2').textContent = level.name;
   card.querySelector('p').textContent = level.desc;
@@ -199,7 +232,7 @@ for (const level of LEVELS) {
 let loaded = false;
 view.ready.finally(() => {
   loaded = true;
-  for (const card of levelList.children) card.disabled = false;
+  for (const card of levelList.children) card.disabled = !!card.dataset.empty;
   showMenuStep();
 });
 
@@ -260,11 +293,11 @@ let current = null; // { question, correct: null | boolean, typed: digits entere
 function askQuestion() {
   input.releaseAll();
   const question = deck.next(Math.max(match.score.home, match.score.away));
-  current = { question, correct: null, typed: '' };
+  current = { question, correct: null, typed: '', tries: 0, given: [] };
   quiz.el.hidden = false;
   quiz.el.classList.toggle('has-graph', !!question.graph);
   quiz.q.textContent = question.q;
-  quiz.level.textContent = question.level.toUpperCase();
+  quiz.level.textContent = question.tag || question.level.toUpperCase();
   quiz.level.className = `lvl-${question.level}`;
   quiz.graph.hidden = !question.graph;
   if (question.graph) drawGraph(quiz.graph, question.graph);
@@ -282,9 +315,14 @@ function askQuestion() {
   }));
 }
 
-// Typed answers (Times Tables facts): an on-screen number pad, so no choices give the answer away
-// and the iPad keyboard doesn't pop up over the game. A keyboard's number keys work too.
+// Typed answers (Times Tables facts and some homework): an on-screen number pad, so no choices
+// give the answer away and the iPad keyboard doesn't pop up over the game. A keyboard's number
+// keys work too. Homework adds a decimal point and a fraction bar, and room for longer answers.
+const KEYS = '0123456789';
+const HOMEWORK_KEYS = '0123456789./';
+
 function showNumberPad() {
+  const { homework } = current.question;
   const entry = document.createElement('div');
   entry.className = 'entry';
   const key = (label, press, cls = '') => {
@@ -296,22 +334,30 @@ function showNumberPad() {
   };
   const pad = document.createElement('div');
   pad.className = 'pad';
-  pad.append(
-    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => key(n, () => typeDigit(n))),
-    key('⌫', eraseDigit, 'erase'), key(0, () => typeDigit(0)), key('✓', submitTyped, 'enter'),
-  );
+  pad.append(...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => key(n, () => typeKey(String(n)))));
+  if (homework) {
+    pad.append(key('.', () => typeKey('.')), key(0, () => typeKey('0')), key('/', () => typeKey('/')),
+      key('⌫', eraseDigit, 'erase'), key('✓', submitTyped, 'enter wide'));
+  } else {
+    pad.append(key('⌫', eraseDigit, 'erase'), key(0, () => typeKey('0')), key('✓', submitTyped, 'enter'));
+  }
   quiz.choices.replaceChildren(entry, pad);
   showTyped();
 }
 
 function showTyped() {
-  quiz.choices.querySelector('.entry').textContent = current.typed || '?';
+  const entry = quiz.choices.querySelector('.entry');
+  entry.classList.remove('wrong');
+  entry.textContent = current.typed || '?';
   quiz.choices.querySelector('.enter').disabled = !current.typed;
 }
 
-function typeDigit(n) {
-  if (!current || current.correct !== null || current.typed.length >= 3) return; // 12 × 12 = 144 is the biggest
-  current.typed = current.typed === '0' ? String(n) : current.typed + n;
+function typeKey(k) {
+  if (!current || current.correct !== null) return;
+  const { homework } = current.question;
+  if (!(homework ? HOMEWORK_KEYS : KEYS).includes(k)) return;
+  if (current.typed.length >= (homework ? 8 : 3)) return; // 12 × 12 = 144 is the biggest fact
+  current.typed = current.typed === '0' && k !== '.' ? k : current.typed + k;
   showTyped();
 }
 
@@ -323,42 +369,96 @@ function eraseDigit() {
 
 function submitTyped() {
   if (!current || current.correct !== null || !current.typed) return;
-  const right = current.typed === current.question.rightAnswer;
-  quiz.choices.querySelector('.entry').classList.add(right ? 'right' : 'wrong');
+  const entry = quiz.choices.querySelector('.entry');
+  const given = current.typed;
+  const right = sameAnswer(given, current.question.rightAnswer);
+  if (!attempt(given, right)) { // try again: his wrong answer stays red until he types
+    current.typed = '';
+    entry.classList.add('wrong');
+    quiz.choices.querySelector('.enter').disabled = true;
+    return;
+  }
+  entry.classList.add(right ? 'right' : 'wrong');
   quiz.choices.querySelectorAll('.pad-key').forEach(b => { b.disabled = true; });
-  record(current.typed);
 }
 
 function answer(i) {
   if (!current || current.correct !== null) return;
   const { question } = current;
-  [...quiz.choices.children].forEach((b, k) => {
+  const buttons = [...quiz.choices.children];
+  if (buttons[i].disabled) return; // already tried that one
+  const right = i === question.answer;
+  buttons[i].classList.add(right ? 'right' : 'wrong');
+  buttons[i].disabled = true;
+  if (!attempt(question.choices[i], right)) return;
+  buttons.forEach((b, k) => {
     b.disabled = true;
     if (k === question.answer) b.classList.add('right');
-    else if (k === i) b.classList.add('wrong');
   });
-  record(question.choices[i]);
+}
+
+// Homework gives him 3 tries before showing the answer, with no clock, so he can work it out.
+// The shot only goes in if he gets it on the first try, so guessing through the choices doesn't score.
+const HOMEWORK_TRIES = 3;
+
+// One go at the question. Returns false if he gets to try again, true once it's settled.
+function attempt(given, right) {
+  current.tries++;
+  current.given.push(given);
+  if (!right && current.question.homework && current.tries < HOMEWORK_TRIES) {
+    const left = HOMEWORK_TRIES - current.tries;
+    quiz.verdict.textContent = `Not quite. Try again! (${left} ${left === 1 ? 'try' : 'tries'} left)`;
+    quiz.verdict.className = 'no';
+    quiz.why.textContent = '';
+    quiz.go.hidden = true;
+    quiz.result.hidden = false;
+    return false;
+  }
+  record(given, right);
+  return true;
 }
 
 // Score, log and explain an answer, whether it was picked or typed.
-function record(given) {
+function record(given, right) {
   const { question } = current;
-  current.correct = given === question.rightAnswer;
+  const firstTry = right && current.tries === 1;
+  current.correct = firstTry;
   stats.total++;
   if (current.correct) stats.right++;
-  logAnswer({
-    ...game,
-    level: question.level,
-    skill: question.skill,
-    question: question.q,
-    answer: given,
-    correctAnswer: question.rightAnswer,
-    right: current.correct,
-  });
-  quiz.verdict.textContent = current.correct ? 'Correct! ⚽' : `Not quite. It's ${question.rightAnswer}.`;
-  quiz.verdict.className = current.correct ? 'yes' : 'no';
+  if (question.homework) {
+    deck.done(question.n, firstTry ? 'first' : right ? 'solved' : 'shown');
+    logAnswer({
+      kind: 'homework',
+      player: game.player,
+      gameId: game.gameId,
+      worksheet: currentLevel.homework.title,
+      n: question.n,
+      skill: question.skill,
+      question: question.q,
+      tries: current.tries,
+      answers: current.given.join(' → '),
+      correctAnswer: question.rightAnswer,
+      firstTry,
+      solved: right,
+    });
+  } else {
+    logAnswer({
+      ...game,
+      level: question.level,
+      skill: question.skill,
+      question: question.q,
+      answer: given,
+      correctAnswer: question.rightAnswer,
+      right: current.correct,
+    });
+  }
+  quiz.verdict.textContent = firstTry ? 'Correct! ⚽'
+    : right ? `You got it! 👍 Get it on the first try to score.`
+    : `Not quite. It's ${question.rightAnswer}.`;
+  quiz.verdict.className = right ? 'yes' : 'no';
   quiz.why.textContent = question.why;
   quiz.go.textContent = current.correct ? 'SHOOT! ⚽' : 'Take the shot';
+  quiz.go.hidden = false;
   quiz.result.hidden = false;
 }
 
@@ -378,7 +478,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (current.question.typed) {
-    if (/^[0-9]$/.test(e.key)) typeDigit(Number(e.key));
+    if (e.key.length === 1) typeKey(e.key);
     else if (e.code === 'Backspace') eraseDigit();
     else if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) { e.preventDefault(); submitTyped(); }
     return;

@@ -28,4 +28,4 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     os.chdir(ROOT)
-    http.server.ThreadingHTTPServer(('0.0.0.0', 8000), Handler).serve_forever()
+    http.server.ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('PORT', 8000))), Handler).serve_forever()
