@@ -107,6 +107,7 @@
     #stamina.exhausted { animation: blink 0.5s steps(2) infinite; }
     @keyframes blink { 50% { opacity: 0.35; } }
     .btn.tired { opacity: 0.35; }
+    .btn.off { opacity: 0.15; }
 
     /* Touch controls (only shown on touch screens) */
     #joy-hint, #joy-base, .btn { display: none; }
@@ -144,31 +145,38 @@
       justify-content: center;
       border-radius: 50%;
       border: 3px solid rgba(255, 255, 255, 0.55);
-      font-size: clamp(11px, 2.8vmin, 17px);
+      font-size: clamp(10px, 2.3vmin, 15px);
       text-shadow: 0 1px 2px #000;
       box-sizing: border-box;
     }
     .btn.held { border-color: #fff; filter: brightness(1.4); }
     #btn-b {
       right: calc(max(16px, env(safe-area-inset-right)) + 2vmin);
-      bottom: 7vmin;
-      width: 23vmin;
-      height: 23vmin;
+      bottom: 5vmin;
+      width: 17vmin;
+      height: 17vmin;
       background: rgba(229, 57, 53, 0.5);
     }
     #btn-b.defend { background: rgba(251, 140, 0, 0.5); }
     #btn-a {
-      right: calc(max(16px, env(safe-area-inset-right)) + 27vmin);
-      bottom: 3vmin;
-      width: 17vmin;
-      height: 17vmin;
+      right: calc(max(16px, env(safe-area-inset-right)) + 21vmin);
+      bottom: 2vmin;
+      width: 13vmin;
+      height: 13vmin;
       background: rgba(67, 160, 71, 0.5);
     }
+    #btn-t {
+      right: calc(max(16px, env(safe-area-inset-right)) + 2vmin);
+      bottom: 34vmin;
+      width: 11vmin;
+      height: 11vmin;
+      background: rgba(142, 68, 173, 0.55);
+    }
     #btn-s {
-      right: calc(max(16px, env(safe-area-inset-right)) + 17vmin);
-      bottom: 32vmin;
-      width: 15vmin;
-      height: 15vmin;
+      right: calc(max(16px, env(safe-area-inset-right)) + 13vmin);
+      bottom: 24vmin;
+      width: 11vmin;
+      height: 11vmin;
       background: rgba(30, 136, 229, 0.5);
     }
 
@@ -616,7 +624,8 @@
   <div class="btn" id="btn-s" data-key="s">SPRINT</div>
   <div class="btn" id="btn-a" data-key="a">PASS</div>
   <div class="btn" id="btn-b" data-key="b">SHOOT</div>
-  <div id="help">Move: WASD / arrows · Pass / Switch: J · Shoot / Tackle: K or Space (hold to power up) · Sprint: Shift</div>
+  <div class="btn" id="btn-t" data-key="t">TRICK</div>
+  <div id="help">Move: WASD / arrows · Pass / Switch: J · Shoot / Tackle: K or Space (hold to power up) · Sprint: Shift · Trick: L · Your keeper: J throw, K kick, Shift roll</div>
 
   <div id="menu">
     <h1>6TH SHARK'S SOCCER</h1>

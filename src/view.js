@@ -1,7 +1,7 @@
 // Draws the match in 3D with a TV-style camera up in the stands along the near touchline.
 import * as THREE from 'three';
 import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, HOME, AWAY } from './sim.js';
-import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, ANIM_SPEED } from './characters.js';
+import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, PLAY_SPEED, ANIM_SPEED } from './characters.js';
 
 const S = 0.05;                       // simulation units → metres
 const M = 60;                         // grass run-off around the pitch, in units
@@ -134,6 +134,9 @@ export class View {
       for (const [key, clip] of Object.entries(assets.clips)) v.actions[key] = v.mixer.clipAction(clip);
       v.busyUntil = 0;
       v.lastKick = p.kickAt;
+      v.lastAct = p.gkAct;
+      v.hands = ['mixamorigLeftHand', 'mixamorigRightHand'].map(n => model.getObjectByName(n));
+      v.foot = model.getObjectByName('mixamorigRightFoot');
       this.fadeTo(v, p.role === 'gk' ? 'gkIdle' : 'idle', 0);
     });
     this.applyBadges();
@@ -161,28 +164,94 @@ export class View {
     const m = this.match, t = m.t;
     v.model.rotation.y = Math.PI / 2 - p.angle; // the model faces +z; the game measures angles from +x
     const speed = Math.hypot(p.vx, p.vy) * S;
-    const holding = m.ball.owner === p;
+    const gk = p.role === 'gk';
 
     if (p.kickAt !== v.lastKick) {
       v.lastKick = p.kickAt;
-      if (t - p.kickAt < 0.2) this.fadeTo(v, p.kickType, 0.08, { once: true, start: START[p.kickType], speed: 1.25 });
+      if (t - p.kickAt < 0.2 && v.actions[p.kickType]) {
+        this.fadeTo(v, p.kickType, 0.08, { once: true, start: START[p.kickType], speed: 1.25 });
+      }
     }
-    if (p.role === 'gk' && holding && !v.holding) this.fadeTo(v, 'gkCatch', 0.1, { once: true, start: START.gkCatch });
-    v.holding = holding;
+    if (gk && p.gkAct !== v.lastAct) {
+      v.lastAct = p.gkAct;
+      const key = p.gkAct && t - p.gkAct.at < 0.3 && this.keeperClip(p);
+      if (key) this.fadeTo(v, key, 0.1, { once: true, start: START[key] || 0, speed: PLAY_SPEED[key] || 1 });
+    }
 
-    if (t >= v.busyUntil && !(p.role === 'gk' && holding)) {
-      if (speed > 0.6) {
-        // Pick the running style closest to the player's speed, then fine-tune the leg speed to match
-        const gait = p.sprinting ? 'sprint' : speed > 4 ? 'run' : 'jog';
+    if (t >= v.busyUntil) {
+      if (gk && m.ball.owner === p) {
+        this.fadeTo(v, p.goalKick ? 'gkIdle' : 'gkHold', 0.3); // a goal kick's ball is on the grass
+      } else if (speed > 0.6) {
+        // Split the movement into forwards and sideways (+ = towards his left)
+        const fwd = (p.vx * Math.cos(p.angle) + p.vy * Math.sin(p.angle)) * S;
+        const side = (p.vx * Math.sin(p.angle) - p.vy * Math.cos(p.angle)) * S;
+        const watching = gk || p.faceBall; // facing the ball, not where they're going
+        let gait;
+        if (t < p.trickUntil) {
+          gait = p.trickSide === 'L' ? 'cutL' : 'cutR';
+        } else if (watching && Math.abs(side) > Math.abs(fwd)) {
+          gait = gk && speed < 4 ? (side > 0 ? 'gkStepL' : 'gkStepR') : (side > 0 ? 'strafeL' : 'strafeR');
+        } else if (watching && fwd < 0) {
+          gait = 'backpedal';
+        } else {
+          // Pick the running style closest to the player's speed, then fine-tune the leg speed to match
+          gait = p.sprinting ? 'sprint' : speed > 4 ? 'run' : 'jog';
+        }
         this.fadeTo(v, gait, 0.2);
         v.actions[gait].timeScale = THREE.MathUtils.clamp(speed / ANIM_SPEED[gait], 0.6, 1.9);
-      } else if (p.role === 'gk') {
-        this.fadeTo(v, 'gkIdle', 0.3);
+      } else if (gk) {
+        // With the ball far up the other end, he waves his defenders into place
+        const far = Math.abs(m.ball.x - (p.team.dir === 1 ? F.left : F.right)) > 1000;
+        this.fadeTo(v, far && m.state === 'play' ? 'gkDirect' : 'gkIdle', 0.4);
       } else {
         this.fadeTo(v, m.state === 'play' ? 'idle' : 'stand', 0.3);
       }
     }
     if (m.state !== 'question') v.mixer.update(dt); // freeze-frame while a question is up
+  }
+
+  // The animation for the keeper's latest move
+  keeperClip(p) {
+    const a = p.gkAct;
+    // Is the ball off to his left? (His left, in pitch terms, is (sin angle, -cos angle).)
+    const left = -a.side * Math.cos(p.angle) > 0;
+    switch (a.type) {
+      case 'dive': return left ? 'gkDiveL' : 'gkDiveR';
+      case 'block': return left ? pick(['gkBlockL', 'gkBlockL2']) : 'gkBlockR';
+      case 'catch': return 'gkCatch';
+      case 'catchChest': return 'gkCatchChest';
+      case 'catchLeap': return 'gkCatchLeap';
+      case 'catchHigh': return 'gkCatchHigh';
+      case 'scoop': return 'gkScoop';
+      case 'miss': return 'gkMiss';
+      case 'throw': return 'gkThrow';
+      case 'dropKick': return 'gkDropKick';
+      case 'roll': return 'gkRoll';
+      case 'place': return 'gkPlace';
+      default: return null;
+    }
+  }
+
+  // Where the ball sits while a keeper has it: in his hands, dropping onto his foot for a
+  // drop kick, or on the grass for a goal kick. Null for the simple figures.
+  keeperBall(o) {
+    const v = this.playerViews[this.match.players.indexOf(o)];
+    if (!v.hands) return null;
+    const t = this.match.t, a = o.gkAct;
+    const ground = () => new THREE.Vector3(o.x * S + o.fx * 0.55, BALL_SIZE, o.y * S + o.fy * 0.55);
+    if (o.goalKick && !(a && a.type === 'place' && t - a.at < 0.65)) return ground();
+    v.g.updateMatrixWorld(true);
+    const hands = v.hands[0].getWorldPosition(new THREE.Vector3())
+      .add(v.hands[1].getWorldPosition(new THREE.Vector3())).multiplyScalar(0.5);
+    hands.x += o.fx * 0.06;
+    hands.z += o.fy * 0.06;
+    if (a && a.type === 'dropKick' && t - a.at > 0.65) {
+      const s = Math.min(1, (t - a.at - 0.65) / 0.27); // falls from his hands onto his foot
+      const foot = v.foot.getWorldPosition(new THREE.Vector3());
+      foot.y += BALL_SIZE;
+      return hands.lerp(foot, s * s);
+    }
+    return hands;
   }
 
   resize() {
@@ -699,7 +768,10 @@ export class View {
     // Ball
     const b = m.ball;
     let bx = b.x * S, bz = b.y * S, by = BALL_SIZE + b.z * S;
-    if (b.owner && b.owner.role === 'gk') {
+    const held = b.owner && b.owner.role === 'gk' && this.keeperBall(b.owner);
+    if (held) {
+      bx = held.x; by = held.y; bz = held.z;
+    } else if (b.owner && b.owner.role === 'gk') {
       const o = b.owner;
       bx = o.x * S + o.fx * 0.35;
       bz = o.y * S + o.fy * 0.35;
@@ -724,7 +796,7 @@ export class View {
     this.ballShadow.material.opacity = 0.3 * (1 - lift * 0.6);
 
     // Control marker
-    const c = m.controlled;
+    const c = m.keeperAim || m.controlled; // while Gabe's keeper has the ball: who it's going to
     const show = !!c && m.state !== 'menu';
     this.ring.visible = this.arrow.visible = show;
     if (show) {

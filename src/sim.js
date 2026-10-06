@@ -14,6 +14,13 @@ const RUN_SPEED = 150;
 const SPRINT_SPEED = 200;
 const AI_SPEED = 140;
 const KEEPER_SPEED = 140;
+// How long after starting each keeper move the ball leaves him (matches the animations)
+const KEEPER_RELEASE = { throw: 0.58, dropKick: 0.92, roll: 0.75 };
+const GOAL_KICK_SETUP = 1.4; // time to put the ball down for a goal kick
+const TRICK_SPEED = 240;    // a quick burst, faster than sprinting (12 m/s)
+const TRICK_TIME = 0.45;    // ...for about 5 metres
+const TRICK_COOLDOWN = 1.2;
+const KEEPER_WAIT = 8; // Gabe's keeper throws it himself if nothing is chosen in this many seconds
 const GRAVITY = 196;
 const WIN_GOALS = 5;
 // Stamina runs from 1 (fresh) to 0 (exhausted).
@@ -78,6 +85,8 @@ export class Match {
           noTouchUntil: 0, stunUntil: 0, tackleReadyAt: 0, nextDecision: 0,
           holdUntil: 0, lungeUntil: 0, lx: 0, ly: 0, kickAt: -10,
           stamina: 1, exhausted: false, sprinting: false, kickType: 'pass',
+          trickUntil: 0, trickReadyAt: 0, trickSide: 'L', tvx: 0, tvy: 0, tface: 0,
+          diveUntil: 0, diveMoveUntil: 0, diveSpeed: 0, gkAct: null, release: null, faceBall: false,
         };
         this.players.push(p);
         this.teams.get(team).push(p);
@@ -87,7 +96,7 @@ export class Match {
 
     // Set every frame by the input code.
     this.move = { x: 0, y: 0, mag: 0 };
-    this.held = { a: false, b: false, s: false };
+    this.held = { a: false, b: false, s: false, t: false };
 
     this.charging = false;
     this.nextAutoSwitch = 0;
@@ -117,6 +126,7 @@ export class Match {
       p.angle = p.team.dir === 1 ? 0 : Math.PI;
       p.fx = Math.cos(p.angle); p.fy = 0;
       p.noTouchUntil = 0; p.stunUntil = 0; p.lungeUntil = 0; p.tackleReadyAt = 0;
+      p.diveUntil = 0; p.release = null; p.gkAct = null; p.trickUntil = 0;
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
     }
@@ -140,6 +150,8 @@ export class Match {
     if (this.state !== 'play') return;
     if (team === HOME) this.score.home++; else this.score.away++;
     this.charging = false;
+    const keeper = this.teams.get(team === HOME ? AWAY : HOME).find(p => p.role === 'gk');
+    if (this.t >= keeper.diveUntil) keeper.gkAct = { type: 'miss', at: this.t };
     for (const p of this.players) { p.vx = 0; p.vy = 0; }
     const { home, away } = this.score;
     if (home >= WIN_GOALS || away >= WIN_GOALS) {
@@ -161,6 +173,9 @@ export class Match {
     const b = this.ball;
     b.vx = 0; b.vy = 0; b.vz = 0; b.z = 0;
     this.setOwner(k);
+    k.goalKick = true;
+    k.gkAct = { type: 'place', at: this.t }; // he puts the ball down first
+    k.holdUntil = this.t + GOAL_KICK_SETUP;
     this.showToast('GOAL KICK');
   }
 
@@ -168,13 +183,17 @@ export class Match {
   showToast(text) { this.toast = { text, until: this.t + 1.3 }; }
 
   // ---------- Buttons ----------
-  // a = Pass / Switch, b = Shoot / Tackle, s = Sprint
+  // a = Pass / Switch, b = Shoot / Tackle, s = Sprint, t = Trick
   press(key) {
     if (this.held[key]) return;
     this.held[key] = true;
     if (this.state !== 'play') return;
+    const gk = this.gabesKeeper();
+    if (gk) { this.humanKeeper(gk, key); return; }
     const hasBall = this.attacking();
-    if (key === 'a') {
+    if (key === 't') {
+      this.humanTrick();
+    } else if (key === 'a') {
       if (hasBall) this.humanPass(); else this.switchPlayer();
     } else if (key === 'b') {
       if (hasBall) { this.charging = true; this.chargeStart = this.t; } else this.humanTackle();
@@ -191,6 +210,12 @@ export class Match {
 
   attacking() {
     return this.ball.owner === this.controlled;
+  }
+
+  // Gabe's keeper holding the ball and waiting to be told how to put it back in play
+  gabesKeeper() {
+    const o = this.ball.owner;
+    return this.state === 'play' && o && o.role === 'gk' && o.team === HOME && !o.release ? o : null;
   }
 
   power() {
@@ -246,6 +271,72 @@ export class Match {
     this.ball.scripted = true; // nobody can block or save it
   }
 
+  // Pass = throw, Shoot = drop kick, Sprint = roll it out. On a goal kick: Pass = short, Shoot = long.
+  humanKeeper(gk, key) {
+    if (this.t < gk.holdUntil || !this.keeperAim) return; // still gathering the ball
+    const type = gk.goalKick ? { a: 'goalPass', b: 'goalKick' }[key] : { a: 'throw', b: 'dropKick', s: 'roll' }[key];
+    if (type) this.keeperDistribute(gk, this.keeperAim, type);
+  }
+
+  // With the ball: flick it over a player right in front of you, or cut past him.
+  // Without it: dart round whoever is in the way.
+  humanTrick() {
+    const me = this.controlled, m = this.move;
+    if (this.t < me.trickReadyAt) return;
+    let dir = m.mag > 0.2 ? { x: m.x, y: m.y } : { x: me.fx, y: me.fy };
+    if (this.ball.owner === me) {
+      const o = this.blocker(me, dir, 75);
+      if (o && this.ahead(me, dir, o) > 0.9) { this.flick(me, dir, o); return; }
+    } else if (m.mag <= 0.2) {
+      dir = norm(this.ball.x - me.x, this.ball.y - me.y); // no direction given: head for the ball
+    }
+    this.cut(me, dir);
+  }
+
+  // The nearest opponent in front of p (within range), going in direction dir
+  blocker(p, dir, range) {
+    let best = null, bd = range;
+    for (const o of this.teams.get(p.team === HOME ? AWAY : HOME)) {
+      const d = dist(p, o);
+      if (d < bd && this.ahead(p, dir, o) > 0.3) { bd = d; best = o; }
+    }
+    return best;
+  }
+
+  // How straight ahead of p the player o is: 1 = dead ahead, 0 = level, negative = behind
+  ahead(p, dir, o) {
+    const n = norm(o.x - p.x, o.y - p.y);
+    return n.x * dir.x + n.y * dir.y;
+  }
+
+  // A burst diagonally past the nearest opponent, away from the side he's on. The defender
+  // is wrong-footed for a moment (Gabe's own player never is: he has to react himself).
+  cut(p, dir) {
+    const o = this.blocker(p, dir, 160);
+    const left = { x: dir.y, y: -dir.x }; // the player's own left
+    const goLeft = o ? (o.x - p.x) * left.x + (o.y - p.y) * left.y < 0 : Math.random() < 0.5;
+    const side = goLeft ? left : { x: -left.x, y: -left.y };
+    const v = norm(dir.x + side.x, dir.y + side.y);
+    p.tvx = v.x * TRICK_SPEED;
+    p.tvy = v.y * TRICK_SPEED;
+    p.tface = Math.atan2(dir.y, dir.x); // body stays facing forward while the feet go diagonally
+    p.trickSide = goLeft ? 'L' : 'R';
+    p.trickUntil = this.t + TRICK_TIME;
+    p.trickReadyAt = this.t + TRICK_COOLDOWN;
+    if (o && dist(p, o) < 110 && o !== this.controlled && o.role !== 'gk') o.stunUntil = this.t + 0.45;
+  }
+
+  // Pop the ball up over a player standing right in front, and run on to it
+  flick(p, dir, o) {
+    this.kick(p, dir.x, dir.y, 150, 140);
+    p.kickType = 'flick';
+    p.trickReadyAt = this.t + TRICK_COOLDOWN;
+    o.noTouchUntil = this.t + 0.8;
+    if (o !== this.controlled) o.stunUntil = this.t + 0.4;
+    this.ball.passTarget = p; // the computer's players chase their own flick
+    this.ball.passUntil = this.t + 2;
+  }
+
   humanTackle() {
     const me = this.controlled;
     if (this.t < me.tackleReadyAt) return;
@@ -254,7 +345,7 @@ export class Match {
     me.kickType = 'tackle';
     const o = this.ball.owner;
     if (o && o.team !== me.team && o.role !== 'gk' && dist(me, o) < PLAYER_R * 2 + 22) {
-      if (Math.random() < 0.65) this.steal(me);
+      if (Math.random() < (this.t < o.trickUntil ? 0.25 : 0.65)) this.steal(me); // harder mid-trick
       else me.stunUntil = this.t + 0.3;
       return;
     }
@@ -293,8 +384,70 @@ export class Match {
     b.lastTouch = p;
     b.passTarget = null;
     if (p.team === HOME && p.role !== 'gk') this.controlled = p;
-    if (p.role === 'gk') p.holdUntil = this.t + 0.9;
+    if (p.role === 'gk') {
+      p.holdUntil = Math.max(this.t + 0.9, p.diveUntil); // a diving keeper gets up first
+      p.goalKick = false;
+      p.release = null;
+      if (this.t >= p.diveUntil) p.gkAct = { type: this.catchType(p), at: this.t };
+      this.assignMarks(p);
+      if (p.team === HOME) this.showToast('THROW, KICK or ROLL?');
+    }
     p.nextDecision = this.t + 0.35;
+  }
+
+  catchType(p) {
+    const b = this.ball;
+    if (b.z < 5) return 'scoop';
+    if (b.z < 18) return 'catch';
+    if (b.z < 32) return 'catchChest';
+    return Math.hypot(p.vx, p.vy) > 80 ? 'catchLeap' : 'catchHigh';
+  }
+
+  // While a keeper has the ball, each player on the other team picks someone to mark, closest pairs first.
+  assignMarks(gk) {
+    this.marks = new Map();
+    const markers = this.teams.get(gk.team === HOME ? AWAY : HOME).filter(p => p.role !== 'gk');
+    const men = this.teams.get(gk.team).filter(p => p.role !== 'gk');
+    const pairs = [];
+    for (const m of markers) for (const man of men) pairs.push([dist(m, man), m, man]);
+    pairs.sort((a, c) => a[0] - c[0]);
+    const taken = new Set();
+    for (const [, m, man] of pairs) {
+      if (!this.marks.has(m) && !taken.has(man)) { this.marks.set(m, man); taken.add(man); }
+    }
+  }
+
+  // Start the keeper's throw, kick or roll; the ball leaves his hands partway through the move.
+  keeperDistribute(p, mate, type) {
+    p.release = { type, mate };
+    p.releaseAt = this.t + (KEEPER_RELEASE[type] ?? 0);
+    if (!p.goalKick) p.gkAct = { type, at: this.t }; // goal kicks use an ordinary kick
+  }
+
+  releaseBall(p) {
+    const { type, mate } = p.release;
+    p.release = null;
+    p.goalKick = false;
+    const b = this.ball;
+    const tx = mate.x + mate.vx * 0.6, ty = mate.y + mate.vy * 0.6;
+    const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+    if (type === 'roll' || type === 'goalPass') {
+      this.kick(p, dx, dy, clamp(d * 0.55 + 110, 200, 480));
+    } else if (type === 'throw') {
+      // From head height, landing at the teammate's feet
+      const speed = clamp(d * 0.6 + 200, 260, 480), T = d / speed;
+      this.kick(p, dx, dy, speed, (0.5 * GRAVITY * T * T - 40) / T);
+      b.z = 40;
+    } else {
+      // Drop kick or long goal kick: high and far, and not quite as accurate
+      const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.12;
+      const speed = clamp(d * 0.45 + 300, 380, 600), T = d * 0.8 / speed;
+      this.kick(p, Math.cos(a), Math.sin(a), speed, 0.5 * GRAVITY * T);
+      if (type === 'dropKick') b.z = 14;
+    }
+    if (!type.startsWith('goal')) p.kickType = 'release'; // his own move is already playing
+    b.passTarget = mate;
+    b.passUntil = this.t + 2.5;
   }
 
   kick(p, dx, dy, speed, lift = 0) {
@@ -401,11 +554,23 @@ export class Match {
   keeperAI(p) {
     const b = this.ball, dir = p.team.dir, gx = ownGoalX(p.team);
     if (b.owner === p) {
-      if (this.t >= p.holdUntil) {
+      if (p.release) {
+        if (this.t >= p.releaseAt) this.releaseBall(p);
+      } else if (this.t >= p.holdUntil + (p.team === HOME ? KEEPER_WAIT : 0.8)) {
+        // The computer's keeper (or Gabe's, if nothing gets chosen) picks what suits the distance
         const m = this.pickPassTarget(p, { x: dir, y: 0 });
-        if (m) this.passTo(p, m);
+        if (m) {
+          const d = dist(p, m);
+          this.keeperDistribute(p, m, p.goalKick ? (d < 300 ? 'goalPass' : 'goalKick')
+            : d < 260 ? 'roll' : d < 560 ? 'throw' : 'dropKick');
+        }
       }
       return { vx: 0, vy: 0 };
+    }
+    this.maybeDive(p);
+    if (this.t < p.diveUntil) {
+      // Flying sideways, then lying there and getting back up
+      return this.t < p.diveMoveUntil ? { vx: 0, vy: p.diveDir * p.diveSpeed } : { vx: 0, vy: 0 };
     }
     // Come out for a slow loose ball in the box.
     if (!b.owner && Math.abs(b.x - gx) < 130 && Math.abs(b.y) < 160 && Math.hypot(b.vx, b.vy) < 380) {
@@ -416,11 +581,58 @@ export class Match {
     return this.seek(p, gx + dir * (PLAYER_R + out), ty, KEEPER_SPEED);
   }
 
+  // A shot coming at goal: dive (or go down sideways) to where it's heading,
+  // or jump for one that's going over him.
+  maybeDive(p) {
+    const b = this.ball;
+    if (b.owner || this.t < p.diveUntil) return;
+    if (b.lastTouch && b.lastTouch.team === p.team) return;
+    const toward = -p.team.dir; // the way the ball travels into this keeper's goal
+    if (b.vx * toward < 250) return;
+    const T = (p.x - b.x) / b.vx;
+    if (T < 0 || T > 0.45) return;
+    const y = b.y + b.vy * T;
+    if (Math.abs(y) > GOAL_HALF + 25) return; // going wide: let it go
+    const z = b.z > 0 || b.vz > 0 ? Math.max(0, b.z + b.vz * T - 0.5 * GRAVITY * T * T) : 0;
+    const off = y - p.y;
+    if (z > 45) {
+      p.gkAct = { type: 'miss', at: this.t }; // up he goes, but it's too high
+      p.diveUntil = this.t + 1.1;
+      p.diveMoveUntil = this.t;
+      return;
+    }
+    if (Math.abs(off) < 18) return; // straight at him: an ordinary catch
+    const block = Math.abs(off) < 40 && z < 20;
+    let move = clamp(off, -(block ? 26 : 45), block ? 26 : 45);
+    if (b.scripted) move *= 0.35; // a right answer always beats him
+    p.gkAct = { type: block ? 'block' : 'dive', at: this.t, side: Math.sign(off) };
+    p.diveDir = Math.sign(move);
+    p.diveSpeed = Math.abs(move) / 0.5;
+    p.diveMoveUntil = this.t + 0.5;
+    p.diveUntil = this.t + (block ? 1.7 : 2.0);
+  }
+
   fieldAI(p) {
     const b = this.ball, team = p.team;
     if (b.owner === p) return this.aiWithBall(p);
     if (!b.owner && b.passTarget === p && this.t < b.passUntil) {
       return this.seek(p, b.x + b.vx * 0.15, b.y + b.vy * 0.15, AI_SPEED * 1.1);
+    }
+    const keeper = b.owner && b.owner.role === 'gk' ? b.owner : null;
+    if (keeper && keeper.team !== team && this.marks && this.marks.has(p)) {
+      // Stand in front of your man, between him and the keeper, to cut out a pass along the ground
+      const man = this.marks.get(p);
+      const toBall = norm(b.x - man.x, b.y - man.y);
+      p.faceBall = true;
+      const far = dist(p, man) > 150; // hurry back from upfield, then shuffle
+      return this.seek(p, man.x + toBall.x * 40, man.y + toBall.y * 40, AI_SPEED * (far ? 1.25 : 0.85));
+    }
+    if (keeper && keeper.team === team) {
+      // Spread out and keep moving to lose the markers
+      const wiggle = Math.sin(this.t * 0.8 + p.num * 1.7);
+      const x = p.homeX + team.dir * (p.role === 'def' ? 60 : 90);
+      const y = clamp(p.homeY * 1.2 + wiggle * 70, F.top + 40, F.bottom - 40);
+      return this.seek(p, x, y, AI_SPEED * 0.7);
     }
     if (b.owner && b.owner.team === team) {
       const [x, y] = this.supportSpot(p);
@@ -483,6 +695,12 @@ export class Match {
         this.shoot(p, 0.55 + Math.random() * 0.35, (Math.random() * 2 - 1) * 0.9);
         return { vx: 0, vy: 0 };
       }
+      // Someone in the way: sometimes try to get round him with a trick
+      const toGoal = norm(gx - p.x, -p.y);
+      if (this.t >= p.trickReadyAt && this.blocker(p, toGoal, 90) && Math.random() < 0.35) {
+        this.cut(p, toGoal);
+        return { vx: p.tvx, vy: p.tvy };
+      }
       let pressure = Infinity;
       for (const o of opponents) pressure = Math.min(pressure, dist(p, o));
       if (pressure < 80 && Math.random() < 0.6) {
@@ -507,7 +725,7 @@ export class Match {
 
   aiTackles() {
     const o = this.ball.owner;
-    if (!o || o.role === 'gk') return;
+    if (!o || o.role === 'gk' || this.t < o.trickUntil) return; // can't get a foot in mid-trick
     for (const p of this.players) {
       if (p === this.controlled || p.team === o.team || p.role === 'gk') continue;
       if (dist(p, o) < PLAYER_R * 2 + 10 && this.t >= p.tackleReadyAt) {
@@ -523,9 +741,14 @@ export class Match {
   // ---------- Physics ----------
   updatePlayers(dt) {
     const move = this.move;
+    const gk = this.gabesKeeper();
+    // While Gabe's keeper has the ball, the joystick picks who it goes to.
+    this.keeperAim = gk ? this.pickPassTarget(gk, move.mag > 0.2 ? move : { x: 1, y: 0 }) : null;
     for (const p of this.players) {
       let d;
-      p.sprinting = p === this.controlled && this.held.s && move.mag > 0.1 && !p.exhausted;
+      p.faceBall = false;
+      const steering = p === this.controlled && !gk;
+      p.sprinting = steering && this.held.s && move.mag > 0.1 && !p.exhausted;
       if (p.sprinting) {
         p.stamina -= SPRINT_DRAIN * dt;
         if (p.stamina <= 0) { p.stamina = 0; p.exhausted = true; p.sprinting = false; }
@@ -534,7 +757,7 @@ export class Match {
         if (p.exhausted && p.stamina >= RECOVERED_AT) p.exhausted = false;
       }
 
-      if (p === this.controlled) {
+      if (steering) {
         let sp = p.sprinting ? SPRINT_SPEED : RUN_SPEED;
         if (p.exhausted) sp *= 0.9; // tired legs
         if (this.ball.owner === p) sp *= 0.92;
@@ -545,7 +768,8 @@ export class Match {
       } else {
         d = this.fieldAI(p);
       }
-      if (this.t < p.lungeUntil) d = { vx: p.lx * 300, vy: p.ly * 300 };
+      if (this.t < p.trickUntil) d = { vx: p.tvx, vy: p.tvy };
+      else if (this.t < p.lungeUntil) d = { vx: p.lx * 300, vy: p.ly * 300 };
       else if (this.t < p.stunUntil) { d.vx *= 0.25; d.vy *= 0.25; }
 
       const k = Math.min(1, dt * 10);
@@ -560,10 +784,16 @@ export class Match {
 
       // Turn smoothly toward the direction of travel (the ball sits in front).
       let target = null;
-      if (p === this.controlled && move.mag > 0.15) target = Math.atan2(move.y, move.x);
-      else if (p.role === 'gk' && this.ball.owner === p) target = p.team.dir === 1 ? 0 : Math.PI;
+      const facePoint = q => Math.atan2(q.y - p.y, q.x - p.x);
+      if (this.t < p.trickUntil) target = p.tface;
+      else if (steering && move.mag > 0.15) target = Math.atan2(move.y, move.x);
+      else if (p.role === 'gk' && this.ball.owner === p) {
+        // Turn to whoever it's going to
+        const to = p.release ? p.release.mate : p === gk ? this.keeperAim : null;
+        target = to ? facePoint(to) : p.team.dir === 1 ? 0 : Math.PI;
+      } else if (p.role === 'gk' && this.t < p.diveUntil) target = null; // no turning mid-dive
+      else if (p.role === 'gk' || p.faceBall) target = facePoint(this.ball); // shuffle, watching the ball
       else if (Math.hypot(p.vx, p.vy) > 30) target = Math.atan2(p.vy, p.vx);
-      else if (p.role === 'gk') target = Math.atan2(this.ball.y - p.y, this.ball.x - p.x);
       if (target !== null) {
         p.angle = rotateTo(p.angle, target, 12 * dt);
         p.fx = Math.cos(p.angle);
@@ -575,6 +805,7 @@ export class Match {
     for (let i = 0; i < this.players.length; i++) {
       for (let j = i + 1; j < this.players.length; j++) {
         const a = this.players[i], c = this.players[j];
+        if (a.team !== c.team && (this.t < a.trickUntil || this.t < c.trickUntil)) continue; // slipping past
         const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy), min = PLAYER_R * 2;
         if (d < min && d > 0.01) {
           const push = (min - d) / 2, nx = dx / d, ny = dy / d;
@@ -653,7 +884,8 @@ export class Match {
       const isGk = p.role === 'gk';
       if (b.z > (isGk ? 60 : 22)) continue; // too high to reach
       const d = dist(p, b);
-      if (d < (isGk ? TOUCH_R + 8 : TOUCH_R) && d < bd) { bd = d; best = p; }
+      const reach = !isGk ? TOUCH_R : this.t < p.diveMoveUntil + 0.3 ? TOUCH_R + 22 : TOUCH_R + 8; // arms out in a dive
+      if (d < reach && d < bd) { bd = d; best = p; }
     }
     if (!best) return;
     if (best.role === 'gk') {

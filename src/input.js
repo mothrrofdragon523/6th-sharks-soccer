@@ -1,7 +1,7 @@
 // Touch controls (floating joystick + buttons) and keyboard controls.
 // Screen up = away from the camera, so joystick directions map straight onto the pitch.
 
-const KEY_BUTTONS = { KeyJ: 'a', KeyK: 'b', Space: 'b', ShiftLeft: 's', ShiftRight: 's' };
+const KEY_BUTTONS = { KeyJ: 'a', KeyK: 'b', Space: 'b', ShiftLeft: 's', ShiftRight: 's', KeyL: 't' };
 
 export class Input {
   constructor(match) {
@@ -15,6 +15,7 @@ export class Input {
       a: document.getElementById('btn-a'),
       b: document.getElementById('btn-b'),
       s: document.getElementById('btn-s'),
+      t: document.getElementById('btn-t'),
     };
     this.setTouch(window.matchMedia('(pointer: coarse)').matches);
 
@@ -112,7 +113,7 @@ export class Input {
 
   releaseAll() {
     this.keys.clear();
-    for (const key of ['a', 'b', 's']) {
+    for (const key of ['a', 'b', 's', 't']) {
       this.buttons[key].classList.remove('held');
       this.match.release(key);
     }

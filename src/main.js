@@ -492,7 +492,7 @@ const hud = {
   toast: $('toast'),
   power: $('power'), powerFill: $('power-fill'),
   stamina: $('stamina'), staminaFill: $('stamina-fill'),
-  a: $('btn-a'), b: $('btn-b'), s: $('btn-s'),
+  a: $('btn-a'), b: $('btn-b'), s: $('btn-s'), t: $('btn-t'),
 };
 
 function setText(el, text) {
@@ -514,10 +514,22 @@ function updateHud() {
   if (match.toast) setText(hud.toast, match.toast.text);
 
   // Buttons change between attacking and defending, like FC Mobile
+  // and become the keeper's choices while Gabe's keeper has the ball
   const attack = match.attacking();
-  setText(hud.a, attack ? 'PASS' : 'SWITCH');
-  setText(hud.b, attack ? 'SHOOT' : 'TACKLE');
-  hud.b.classList.toggle('defend', !attack);
+  const keeper = match.gabesKeeper();
+  if (keeper && keeper.goalKick) {
+    setText(hud.a, 'SHORT'); setText(hud.b, 'LONG'); setText(hud.s, '');
+  } else if (keeper) {
+    setText(hud.a, 'THROW'); setText(hud.b, 'KICK'); setText(hud.s, 'ROLL');
+  } else {
+    setText(hud.a, attack ? 'PASS' : 'SWITCH');
+    setText(hud.b, attack ? 'SHOOT' : 'TACKLE');
+    setText(hud.s, 'SPRINT');
+  }
+  hud.b.classList.toggle('defend', !attack && !keeper);
+  hud.s.classList.toggle('off', !!(keeper && keeper.goalKick));
+  hud.t.classList.toggle('off', !!keeper);
+  hud.t.classList.toggle('tired', !keeper && match.t < match.controlled.trickReadyAt);
 
   // Stamina bar over your player's head whenever it isn't full
   const me = match.controlled;
@@ -531,7 +543,7 @@ function updateHud() {
     hud.staminaFill.classList.toggle('low', me.stamina < 0.3);
     hud.stamina.classList.toggle('exhausted', me.exhausted);
   }
-  hud.s.classList.toggle('tired', me.exhausted);
+  hud.s.classList.toggle('tired', me.exhausted && !keeper);
 
   hud.power.hidden = !match.charging;
   if (match.charging) {

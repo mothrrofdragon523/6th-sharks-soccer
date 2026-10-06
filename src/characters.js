@@ -16,13 +16,47 @@ export const CLIPS = {
   pass: 'kick soccerball (2)',
   shoot: 'strike foward jog',
   tackle: 'soccer tackle (3)',
+  // Shuffling while marking someone and watching the ball
+  strafeL: 'jog strafe left',
+  strafeR: 'jog strafe right',
+  backpedal: 'jog backward',
+  // Trick button: a sharp cut past an opponent, or flicking the ball up over him
+  cutL: 'jog forward diagonal (2)',
+  cutR: 'jog forward diagonal',
+  flick: 'kick up soccerball',
+  // Goalkeeper. L and R are the keeper's own left and right.
   gkIdle: 'goalkeeper idle',
-  gkCatch: 'goalkeeper catch',
+  gkHold: 'goalkeeper idle (2)',        // standing with the ball in his hands
+  gkStepL: 'goalkeeper sidestep',
+  gkStepR: 'goalkeeper sidestep (2)',
+  gkDirect: 'goalkeeper directing',     // waving his defenders into place
+  gkCatch: 'goalkeeper catch',          // waist-high
+  gkCatchChest: 'goalkeeper catch (2)',
+  gkCatchLeap: 'goalkeeper catch (3)',  // running jump for a high ball
+  gkCatchHigh: 'goalkeeper catch (4)',  // standing jump for a high ball
+  gkScoop: 'goalkeeper scoop',          // bending to gather a rolling ball
+  gkDiveL: 'goalkeeper diving save',
+  gkDiveR: 'goalkeeper diving save (2)',
+  gkBlockL: 'goalkeeper body block',
+  gkBlockL2: 'goalkeeper body block (3)',
+  gkBlockR: 'goalkeeper body block (2)',
+  gkMiss: 'goalkeeper miss',            // jumps and can't reach it
+  gkThrow: 'goalkeeper overhand throw',
+  gkDropKick: 'goalkeeper drop kick',
+  gkRoll: 'goalkeeper pass',            // bowls the ball out along the ground
+  gkPlace: 'goalkeeper placing ball',   // puts the ball down for a goal kick
 };
 // Where to start each one-off move (seconds), so the foot meets the ball about when the game kicks it
-export const START = { pass: 0.3, shoot: 0.35, tackle: 0.2, gkCatch: 0.4 };
+export const START = {
+  pass: 0.3, shoot: 0.35, tackle: 0.2, flick: 0.4,
+  gkCatch: 0.4, gkCatchChest: 0.1, gkCatchLeap: 1.0, gkCatchHigh: 0.35, gkScoop: 0.45,
+  gkDiveL: 0.55, gkDiveR: 0.55, gkBlockL: 0.45, gkBlockL2: 0.6, gkBlockR: 0.4, gkMiss: 0.3,
+  gkThrow: 0.3, gkDropKick: 1.0, gkRoll: 0.5,
+};
+// Playback speed for one-off moves that are slower than the game needs
+export const PLAY_SPEED = { gkDiveL: 1.3, gkDiveR: 1.3, gkBlockL: 1.3, gkBlockL2: 1.3, gkBlockR: 1.3, gkThrow: 1.2, gkDropKick: 1.3, gkRoll: 1.2, gkPlace: 1.3 };
 // Metres per second each running animation was recorded at (measured on the model)
-export const ANIM_SPEED = { jog: 2.42, run: 5.29, sprint: 5.77 };
+export const ANIM_SPEED = { jog: 2.42, run: 5.29, sprint: 5.77, strafeL: 2.8, strafeR: 2.26, backpedal: 2.24, cutL: 2.56, cutR: 2.7, gkStepL: 2.2, gkStepR: 2.9 };
 
 // The pack's moves carry the character forward; the game decides where players go, so pin the hips.
 function stripRootMotion(clip) {
