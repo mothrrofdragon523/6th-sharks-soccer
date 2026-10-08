@@ -1,8 +1,8 @@
-import { Match } from './sim.js';
+import { Match, shotLevel } from './sim.js';
 import { View } from './view.js';
 import { Input } from './input.js';
 import { LEVELS } from './levels.js';
-import { QuestionDeck, drawGraph, sameAnswer } from './questions.js';
+import { QuestionDeck, drawGraph, sameAnswer, howFarOff } from './questions.js';
 import { HomeworkDeck } from './homework.js';
 import { logAnswer, flush as flushLog } from './log.js';
 import { PLAYERS, pinMatches, savedPlayer, savePlayer } from './player.js';
@@ -292,12 +292,13 @@ let current = null; // { question, correct: null | boolean, typed: digits entere
 
 function askQuestion() {
   input.releaseAll();
-  const question = deck.next(Math.max(match.score.home, match.score.away));
+  const metres = Math.round(match.pendingShot.distance);
+  const question = deck.next(shotLevel(metres)); // homework ignores this and goes in worksheet order
   current = { question, correct: null, typed: '', tries: 0, given: [] };
   quiz.el.hidden = false;
   quiz.el.classList.toggle('has-graph', !!question.graph);
   quiz.q.textContent = question.q;
-  quiz.level.textContent = question.tag || question.level.toUpperCase();
+  quiz.level.textContent = question.tag || `${question.level.toUpperCase()} · ${metres} m`;
   quiz.level.className = `lvl-${question.level}`;
   quiz.graph.hidden = !question.graph;
   if (question.graph) drawGraph(quiz.graph, question.graph);
@@ -418,11 +419,23 @@ function attempt(given, right) {
   return true;
 }
 
+// The closer he got, the cooler the shot (see SHOTS in sim.js): right first time is a header
+// that scores; then a bicycle kick off the bar, a volley off the post, or a blast over the bar.
+// Answers that aren't numbers can't be "nearly right", so they get the volley.
+function shotStyle(given, right, firstTry) {
+  if (firstTry) return 'header';
+  if (right) return 'bicycle'; // homework: got there on a retry
+  const off = howFarOff(given, current.question.rightAnswer);
+  if (off === null) return 'volley';
+  return off <= 0.1 ? 'bicycle' : off <= 0.5 ? 'volley' : 'blast';
+}
+
 // Score, log and explain an answer, whether it was picked or typed.
 function record(given, right) {
   const { question } = current;
   const firstTry = right && current.tries === 1;
   current.correct = firstTry;
+  current.style = shotStyle(given, right, firstTry);
   stats.total++;
   if (current.correct) stats.right++;
   if (question.homework) {
@@ -454,6 +467,7 @@ function record(given, right) {
   }
   quiz.verdict.textContent = firstTry ? 'Correct! ⚽'
     : right ? `You got it! 👍 Get it on the first try to score.`
+    : current.style === 'bicycle' ? `So close! It's ${question.rightAnswer}.`
     : `Not quite. It's ${question.rightAnswer}.`;
   quiz.verdict.className = right ? 'yes' : 'no';
   quiz.why.textContent = question.why;
@@ -464,10 +478,10 @@ function record(given, right) {
 
 function takeShot() {
   if (!current || current.correct === null) return;
-  const { correct } = current;
+  const { style } = current;
   current = null;
   quiz.el.hidden = true;
-  match.answerShot(correct);
+  match.answerShot(style);
 }
 
 quiz.go.addEventListener('click', takeShot);
@@ -527,6 +541,11 @@ function updateHud() {
     setText(hud.s, 'SPRINT');
   }
   hud.b.classList.toggle('defend', !attack && !keeper);
+  // SHOOT is greyed out in his own half; past halfway its ring shows how hard the question will be
+  const shooting = attack && !keeper;
+  const zone = shooting && match.canShoot(match.controlled) ? shotLevel(match.shotDistance(match.controlled)) : null;
+  hud.b.classList.toggle('off', shooting && !zone);
+  for (const lvl of ['easy', 'medium', 'hard']) hud.b.classList.toggle(`zone-${lvl}`, zone === lvl);
   hud.s.classList.toggle('off', !!(keeper && keeper.goalKick));
   hud.t.classList.toggle('off', !!keeper);
   hud.t.classList.toggle('tired', !keeper && match.t < match.controlled.trickReadyAt);
@@ -592,7 +611,8 @@ function frame(now) {
     const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
     last = now;
     match.move = input.readMove();
-    match.update(dt);
+    const gameDt = dt * match.timeScale; // slow motion for the big moments
+    match.update(gameDt);
     if (match.state !== lastState) {
       lastState = match.state;
       if (match.state === 'question') {
@@ -600,7 +620,7 @@ function frame(now) {
       }
       if (match.state === 'over') onGameOver();
     }
-    view.update(dt);
+    view.update(gameDt);
     updateHud();
     if (debugBox) updateDebug(now);
   } catch (e) {

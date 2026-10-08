@@ -42,7 +42,7 @@ export const LEVELS = [
     name: 'Times Tables',
     icon: '🔢',
     color: '#ab47bc',
-    desc: 'Type in the facts from 3 × 3 to 12 × 12: the 3s, 4s, 5s and 10s first, then 6s–9s, then 11s and 12s, plus missing numbers from the 6s up',
+    desc: 'Type in the facts from 3 × 3 to 12 × 12: close shots get the 3s, 4s, 5s and 10s, longer shots the 6s–9s, and long-range shots the 11s and 12s, plus missing numbers from the 6s up',
     questions: TIMES_TABLES,
   },
   {

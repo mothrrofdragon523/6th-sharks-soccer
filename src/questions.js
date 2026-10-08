@@ -1,6 +1,6 @@
 // Math questions for the three game modes, from the PA Core Grade 5 standards (with a little Grade 6).
 // Pick one mode per game: Regular Season, Semi-Final or Championship. Each mode has easy, medium
-// and hard questions, and they get harder as the game goes on. Every question has one correct
+// and hard questions: the further from goal he shoots, the harder the question. Every question has one correct
 // answer (a), three wrong ones built from common mistakes, a short explanation (why), and the
 // skill it practises (for the progress log).
 // A few Championship questions carry a graph for drawGraph() to show on a canvas.
@@ -175,8 +175,23 @@ export const TIMES_TABLES = {
 // Every question set, by name.
 export const MODES = { regularSeason: REGULAR_SEASON, semiFinal: SEMI_FINAL, championship: CHAMPIONSHIP, timesTables: TIMES_TABLES };
 
-// Level by how close the leader is to winning (first to 5): 0–1 goals easy, 2–3 medium, 4 hard.
-export const levelFor = leaderGoals => (leaderGoals >= 4 ? 'hard' : leaderGoals >= 2 ? 'medium' : 'easy');
+// The value of a numeric answer like "1,620", "$7.00", "4.5 liters", "3/8 cup" or "1 7/8 miles",
+// with its unit ("liter", "cup", "mile"). Null for anything else, like "(4, 12)" or "Rectangle".
+function numeric(text) {
+  const m = String(text).trim().replace(/,/g, '')
+    .match(/^\$?(?:(\d+)\s+(\d+)\/(\d+)|(\d+)\/(\d+)|(\d*\.?\d+))\s*([a-z ]*)$/i);
+  if (!m) return null;
+  const value = m[1] ? +m[1] + m[2] / m[3] : m[4] ? m[4] / m[5] : +m[6];
+  return { value, unit: m[7].trim().toLowerCase().replace(/s$/, '') };
+}
+
+// How far a wrong answer is from the right one, as a fraction of the right answer
+// (0.05 = 5% off), or null if the answers aren't numbers that can be compared.
+export const howFarOff = (given, right) => {
+  const g = numeric(given), r = numeric(right);
+  if (!g || !r || g.unit !== r.unit) return null;
+  return Math.abs(g.value - r.value) / Math.max(Math.abs(r.value), 1e-9);
+};
 
 // Does a typed answer match? Commas and spaces don't matter, and 4.50 matches 4.5.
 // Fractions have to match as written (so 2/4 doesn't count for 1/2).
@@ -205,8 +220,8 @@ export class QuestionDeck {
 
   // Returns { q, skill, choices, answer (index into choices), rightAnswer (its text),
   // typed, why, graph?, level }. Typed questions have no choices: he enters the answer.
-  next(leaderGoals) {
-    const level = levelFor(leaderGoals);
+  // level is 'easy', 'medium' or 'hard'.
+  next(level) {
     const pool = this.mode[level];
     let fresh = pool.filter(item => !this.used.has(item));
     if (!fresh.length) {

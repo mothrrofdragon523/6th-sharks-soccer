@@ -15,7 +15,10 @@ export const CLIPS = {
   sprint: 'Sprint',
   pass: 'kick soccerball (2)',
   shoot: 'strike foward jog',
-  tackle: 'soccer tackle (3)',
+  // Footplay: a defender's poke at the ball, and dragging it away with the sole of the boot
+  poke: 'kick soccerball',
+  dragR: 'stall soccerball (2)',  // right foot
+  dragL: 'stall soccerball (3)',  // left foot
   // Shuffling while marking someone and watching the ball
   strafeL: 'jog strafe left',
   strafeR: 'jog strafe right',
@@ -24,6 +27,10 @@ export const CLIPS = {
   cutL: 'jog forward diagonal (2)',
   cutR: 'jog forward diagonal',
   flick: 'kick up soccerball',
+  // Trick shots after a math question (see SHOTS in sim.js)
+  header: 'header soccerball',
+  bicycle: 'scissor kick',
+  knee: 'kneeing soccerball (2)',
   // Goalkeeper. L and R are the keeper's own left and right.
   gkIdle: 'goalkeeper idle',
   gkHold: 'goalkeeper idle (2)',        // standing with the ball in his hands
@@ -48,13 +55,15 @@ export const CLIPS = {
 };
 // Where to start each one-off move (seconds), so the foot meets the ball about when the game kicks it
 export const START = {
-  pass: 0.3, shoot: 0.35, tackle: 0.2, flick: 0.4,
+  pass: 0.3, shoot: 0.35, poke: 0.05, dragR: 0.15, dragL: 0.15, flick: 0.4, header: 0.4, bicycle: 0.3, knee: 0,
   gkCatch: 0.4, gkCatchChest: 0.1, gkCatchLeap: 1.0, gkCatchHigh: 0.35, gkScoop: 0.45,
   gkDiveL: 0.55, gkDiveR: 0.55, gkBlockL: 0.45, gkBlockL2: 0.6, gkBlockR: 0.4, gkMiss: 0.3,
   gkThrow: 0.3, gkDropKick: 1.0, gkRoll: 0.5,
 };
-// Playback speed for one-off moves that are slower than the game needs
-export const PLAY_SPEED = { gkDiveL: 1.3, gkDiveR: 1.3, gkBlockL: 1.3, gkBlockL2: 1.3, gkBlockR: 1.3, gkThrow: 1.2, gkDropKick: 1.3, gkRoll: 1.2, gkPlace: 1.3 };
+// Playback speed for one-off moves (kicks default to 1.25, keeper moves to 1)
+export const PLAY_SPEED = { header: 1, bicycle: 1, knee: 1, poke: 1.4, dragR: 1.3, dragL: 1.3, gkDiveL: 1.3, gkDiveR: 1.3, gkBlockL: 1.3, gkBlockL2: 1.3, gkBlockR: 1.3, gkThrow: 1.2, gkDropKick: 1.3, gkRoll: 1.2, gkPlace: 1.3 };
+// Seconds to play of moves that go on longer than the game needs (just the drag, not the whole trick)
+export const PLAY_FOR = { dragR: 0.75, dragL: 0.75 };
 // Metres per second each running animation was recorded at (measured on the model)
 export const ANIM_SPEED = { jog: 2.42, run: 5.29, sprint: 5.77, strafeL: 2.8, strafeR: 2.26, backpedal: 2.24, cutL: 2.56, cutR: 2.7, gkStepL: 2.2, gkStepR: 2.9 };
 

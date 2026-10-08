@@ -1,7 +1,7 @@
 // Draws the match in 3D with a TV-style camera up in the stands along the near touchline.
 import * as THREE from 'three';
 import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, HOME, AWAY } from './sim.js';
-import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, PLAY_SPEED, ANIM_SPEED } from './characters.js';
+import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, PLAY_SPEED, PLAY_FOR, ANIM_SPEED } from './characters.js';
 
 const S = 0.05;                       // simulation units → metres
 const M = 60;                         // grass run-off around the pitch, in units
@@ -57,6 +57,7 @@ export class View {
     // Simple figures show straight away; the realistic Mixamo players replace them once loaded.
     this.playerViews = match.players.map((p, i) => this.buildPlayer(p, lookFor(i)));
     this.buildBall();
+    this.buildTrail();
     this.buildMarker();
 
     this.logoTex = new Map();
@@ -157,7 +158,7 @@ export class View {
     next.fadeIn(fade).play();
     v.current = key;
     v.currentAction = next;
-    v.busyUntil = once ? this.match.t + (next.getClip().duration - start) / speed - fade : 0;
+    v.busyUntil = once ? this.match.t + Math.min((next.getClip().duration - start) / speed - fade, PLAY_FOR[key] ?? Infinity) : 0;
   }
 
   animateModel(v, p, dt) {
@@ -169,7 +170,7 @@ export class View {
     if (p.kickAt !== v.lastKick) {
       v.lastKick = p.kickAt;
       if (t - p.kickAt < 0.2 && v.actions[p.kickType]) {
-        this.fadeTo(v, p.kickType, 0.08, { once: true, start: START[p.kickType], speed: 1.25 });
+        this.fadeTo(v, p.kickType, 0.08, { once: true, start: START[p.kickType], speed: PLAY_SPEED[p.kickType] ?? 1.25 });
       }
     }
     if (gk && p.gkAct !== v.lastAct) {
@@ -207,6 +208,9 @@ export class View {
         this.fadeTo(v, m.state === 'play' ? 'idle' : 'stand', 0.3);
       }
     }
+    // A header is a leap: lift him off the grass around the moment his head meets the ball
+    const u = (t - p.leapAt + 0.4) / 0.6;
+    v.model.position.y = u > 0 && u < 1 ? 0.45 * Math.sin(u * Math.PI) : 0;
     if (m.state !== 'question') v.mixer.update(dt); // freeze-frame while a question is up
   }
 
@@ -723,6 +727,41 @@ export class View {
     this.lastBall = { x: 0, y: 0 };
   }
 
+  // A glowing streak behind Gabe's trick shots, gold for a header
+  buildTrail() {
+    this.trail = { points: [], dots: [] };
+    for (let i = 0; i < 18; i++) {
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(BALL_SIZE * 0.9, 10, 8),
+        new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
+      );
+      dot.visible = false;
+      this.scene.add(dot);
+      this.trail.dots.push(dot);
+    }
+  }
+
+  updateTrail(pos) {
+    const { points, dots } = this.trail, b = this.match.ball;
+    const on = b.style && b.style !== 'blast' && !b.owner && !this.match.trickShot && (b.scripted || this.match.state === 'goal');
+    if (on) {
+      points.unshift(pos.clone());
+      if (points.length > dots.length) points.pop();
+    } else if (points.length) {
+      points.pop(); // fade out from the tail
+    }
+    const colour = b.style === 'header' ? 0xffd54f : b.style === 'bicycle' ? 0x9be3ff : 0xffffff;
+    dots.forEach((dot, i) => {
+      dot.visible = i > 0 && i < points.length;
+      if (!dot.visible) return;
+      const k = 1 - i / dots.length;
+      dot.position.copy(points[i]);
+      dot.scale.setScalar(k);
+      dot.material.color.setHex(colour);
+      dot.material.opacity = 0.55 * k;
+    });
+  }
+
   // Yellow ring + arrow over the player you control
   buildMarker() {
     const yellow = new THREE.MeshBasicMaterial({ color: 0xffeb3b, side: THREE.DoubleSide });
@@ -777,10 +816,10 @@ export class View {
       bz = o.y * S + o.fy * 0.35;
       by = 1.1;
     } else if (b.owner && this.playerViews[0].model) {
-      // Realistic players dribble with the ball close to their feet
-      const o = b.owner;
-      bx = o.x * S + o.fx * 0.55;
-      bz = o.y * S + o.fy * 0.55;
+      // Realistic players dribble with the ball close to their feet (off to one side while dragging it)
+      const o = b.owner, a = o.angle + o.ballTurn;
+      bx = o.x * S + Math.cos(a) * 0.55;
+      bz = o.y * S + Math.sin(a) * 0.55;
     }
     const dx = bx - this.lastBall.x, dz = bz - this.lastBall.y;
     const moved = Math.hypot(dx, dz);
@@ -794,6 +833,7 @@ export class View {
     const lift = Math.min(1, (by - BALL_SIZE) / 3);
     this.ballShadow.scale.setScalar(1 + lift);
     this.ballShadow.material.opacity = 0.3 * (1 - lift * 0.6);
+    this.updateTrail(this.ballMesh.position);
 
     // Control marker
     const c = m.keeperAim || m.controlled; // while Gabe's keeper has the ball: who it's going to
@@ -810,8 +850,11 @@ export class View {
     const tz = THREE.MathUtils.clamp(bz * 0.4, -FIELD_H / 2 + 14, FIELD_H / 2 - 12);
     this.camX += (tx - this.camX) * follow;
     this.camZ += (tz - this.camZ) * follow;
-    this.camera.position.set(this.camX, 26, this.camZ + 34);
-    this.camera.lookAt(this.camX, 0, this.camZ - 2);
+    // A shudder when a shot rattles the woodwork
+    const since = b.hitWood ? t - b.hitWood : 1;
+    const shake = since < 0.35 ? (1 - since / 0.35) * 0.25 * Math.sin(t * 90) : 0;
+    this.camera.position.set(this.camX + shake, 26 + shake * 0.6, this.camZ + 34);
+    this.camera.lookAt(this.camX + shake, 0, this.camZ - 2);
 
     this.renderer.render(this.scene, this.camera);
   }
