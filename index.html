@@ -349,6 +349,23 @@
       font-size: clamp(12px, 3vmin, 16px);
       color: #004c54;
     }
+    .quiz-tags { display: flex; align-items: center; gap: 8px; }
+    #quiz-speak {
+      font: bold clamp(12px, 3vmin, 15px) Arial, sans-serif;
+      padding: 5px 10px;
+      color: #004c54;
+      background: #e0f2f1;
+      border: 2px solid #004c54;
+      border-radius: 14px;
+      cursor: pointer;
+    }
+    #quiz-speak[hidden] { display: none; }
+    #quiz-line[hidden] { display: none; }
+    #quiz-line { margin-top: 6px; padding: 6px 8px; background: #fff8e1; border-radius: 8px; }
+    #quiz-line svg { display: block; width: min(440px, 100%); height: auto; }
+    #quiz-line .line-caption { margin: 2px 0 0; font-weight: bold; color: #5d4037; }
+    #read-aloud { font: inherit; color: #6cc4ee; text-decoration: underline; background: none; border: none; padding: 0; cursor: pointer; }
+    #read-aloud-wrap[hidden] { display: none; }
     #quiz-level { font: bold 11px Arial, sans-serif; padding: 3px 8px; border-radius: 10px; color: #fff; }
     .lvl-easy { background: #43a047; }
     .lvl-medium { background: #fb8c00; }
@@ -649,12 +666,16 @@
     <div id="playing-as" hidden>
       Playing as <strong id="playing-as-name"></strong><span id="playing-as-note"></span>
       · <button id="switch-player" type="button">Switch player</button>
+      <span id="read-aloud-wrap" hidden>· <button id="read-aloud" type="button"></button></span>
     </div>
   </div>
 
   <div id="quiz" hidden>
     <div class="quiz-card">
-      <div class="quiz-head"><span>⚽ SHOT ON GOAL!</span><span id="quiz-level"></span></div>
+      <div class="quiz-head">
+        <span>⚽ SHOT ON GOAL!</span>
+        <span class="quiz-tags"><button id="quiz-speak" type="button" aria-label="Read it to me" hidden>🔊 Read it</button><span id="quiz-level"></span></span>
+      </div>
       <div class="quiz-body">
         <div class="quiz-ask">
           <p id="quiz-q"></p>
@@ -663,7 +684,10 @@
         <div id="quiz-choices"></div>
       </div>
       <div id="quiz-result" hidden>
-        <div><strong id="quiz-verdict"></strong> <span id="quiz-why"></span></div>
+        <div>
+          <strong id="quiz-verdict"></strong> <span id="quiz-why"></span>
+          <div id="quiz-line" hidden><div class="line-svg"></div><p class="line-caption"></p></div>
+        </div>
         <button id="quiz-go"></button>
       </div>
     </div>

@@ -6,6 +6,8 @@ import { QuestionDeck, drawGraph, sameAnswer, howFarOff } from './questions.js';
 import { HomeworkDeck } from './homework.js';
 import { logAnswer, flush as flushLog } from './log.js';
 import { PLAYERS, pinMatches, savedPlayer, savePlayer } from './player.js';
+import { canSpeak, readAloudOn, setReadAloud, unlock as unlockSpeech, say, stop as stopSpeech } from './speech.js';
+import { findSubtraction, numberLine } from './numberline.js';
 
 const $ = id => document.getElementById(id);
 const match = new Match();
@@ -224,7 +226,7 @@ for (const level of LEVELS) {
   card.innerHTML = `<span class="icon">${level.icon}</span><h2></h2><p></p>`;
   card.querySelector('h2').textContent = level.name;
   card.querySelector('p').textContent = level.desc;
-  card.addEventListener('click', () => { if (match.state === 'menu') startLevel(level); });
+  card.addEventListener('click', () => { if (match.state === 'menu') { unlockSpeech(); startLevel(level); } });
   levelList.appendChild(card);
 }
 
@@ -247,6 +249,7 @@ function showMenuStep(step = player ? 'seasons' : 'who') {
     $('menu-sub').textContent = loaded ? 'Choose your season' : 'Loading players…';
     $('playing-as-name').textContent = player.name;
     $('playing-as-note').textContent = player.questions ? '' : ' (no math questions)';
+    showReadAloud();
   } else {
     $('menu-sub').textContent = step === 'who' ? "Who's playing?" : "Enter Gabe's PIN";
   }
@@ -275,6 +278,17 @@ $('pin').addEventListener('submit', e => {
     $('pin-input').focus();
   }
 });
+// Read aloud on or off, for whoever answers the questions on this device
+function showReadAloud() {
+  $('read-aloud-wrap').hidden = !canSpeak || !player.questions;
+  $('read-aloud').textContent = `🔊 Read aloud: ${readAloudOn() ? 'On' : 'Off'}`;
+}
+$('read-aloud').addEventListener('click', () => {
+  unlockSpeech();
+  setReadAloud(!readAloudOn());
+  showReadAloud();
+});
+
 $('switch-player').addEventListener('click', () => {
   player = null;
   savePlayer(null);
@@ -286,7 +300,7 @@ showMenuStep();
 const quiz = {
   el: $('quiz'), q: $('quiz-q'), level: $('quiz-level'), graph: $('quiz-graph'),
   choices: $('quiz-choices'), result: $('quiz-result'), verdict: $('quiz-verdict'),
-  why: $('quiz-why'), go: $('quiz-go'),
+  why: $('quiz-why'), go: $('quiz-go'), speak: $('quiz-speak'), line: $('quiz-line'),
 };
 let current = null; // { question, correct: null | boolean, typed: digits entered so far }
 
@@ -303,7 +317,10 @@ function askQuestion() {
   quiz.graph.hidden = !question.graph;
   if (question.graph) drawGraph(quiz.graph, question.graph);
   quiz.result.hidden = true;
+  quiz.line.hidden = true;
+  quiz.speak.hidden = !canSpeak;
   quiz.el.classList.toggle('typed', question.typed);
+  if (readAloudOn()) say(questionSpeech());
   if (question.typed) { showNumberPad(); return; }
   quiz.choices.replaceChildren(...question.choices.map((text, i) => {
     const b = document.createElement('button');
@@ -315,6 +332,23 @@ function askQuestion() {
     return b;
   }));
 }
+
+// ---------- Read aloud: the question and its choices, or what he got and why ----------
+function questionSpeech() {
+  const { q, choices } = current.question;
+  const ask = /[.?!]$/.test(q) && !/[=×÷+−] ?\?$/.test(q) ? q : `${q}.`; // a pause before the choices
+  return [ask, ...choices.map((c, i) => `${'ABCD'[i]}: ${c}.`)].join(' ');
+}
+
+function resultSpeech() {
+  const caption = quiz.line.hidden ? '' : quiz.line.querySelector('.line-caption').textContent;
+  return [quiz.verdict.textContent.replace(/[⚽👍]/gu, ''), quiz.why.textContent, caption].filter(Boolean).join(' ');
+}
+
+quiz.speak.addEventListener('click', () => {
+  if (!current) return;
+  say(quiz.result.hidden ? questionSpeech() : resultSpeech());
+});
 
 // Typed answers (Times Tables facts and some homework): an on-screen number pad, so no choices
 // give the answer away and the iPad keyboard doesn't pop up over the game. A keyboard's number
@@ -413,6 +447,7 @@ function attempt(given, right) {
     quiz.why.textContent = '';
     quiz.go.hidden = true;
     quiz.result.hidden = false;
+    if (readAloudOn()) say(quiz.verdict.textContent);
     return false;
   }
   record(given, right);
@@ -471,9 +506,20 @@ function record(given, right) {
     : `Not quite. It's ${question.rightAnswer}.`;
   quiz.verdict.className = right ? 'yes' : 'no';
   quiz.why.textContent = question.why;
+  showNumberLine(firstTry ? null : findSubtraction(question.q, question.why));
+  if (readAloudOn()) say(resultSpeech());
   quiz.go.textContent = current.correct ? 'SHOOT! ⚽' : 'Take the shot';
   quiz.go.hidden = false;
   quiz.result.hidden = false;
+}
+
+// Missed it? If there's a subtraction in it, show that step on a number line.
+function showNumberLine(sub) {
+  quiz.line.hidden = !sub;
+  if (!sub) return;
+  const { svg, caption } = numberLine(sub);
+  quiz.line.querySelector('.line-svg').innerHTML = svg;
+  quiz.line.querySelector('.line-caption').textContent = caption;
 }
 
 function takeShot() {
@@ -481,6 +527,7 @@ function takeShot() {
   const { style } = current;
   current = null;
   quiz.el.hidden = true;
+  stopSpeech();
   match.answerShot(style);
 }
 
