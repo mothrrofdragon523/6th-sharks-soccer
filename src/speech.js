@@ -62,6 +62,7 @@ export function speakable(text) {
     .replace(/(^|\s)\?(?=[\s.]|$)/g, '$1what number')
     .replace(/×/g, ' times ')
     .replace(/÷/g, ' divided by ')
+    .replace(/(^|[\s,(])−(?=\d)/g, '$1negative ') // "−12" on its own is a negative number
     .replace(/−/g, ' minus ')
     .replace(/\+/g, ' plus ')
     .replace(/=/g, ' equals ')

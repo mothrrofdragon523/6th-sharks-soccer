@@ -175,11 +175,11 @@ export const TIMES_TABLES = {
 // Every question set, by name.
 export const MODES = { regularSeason: REGULAR_SEASON, semiFinal: SEMI_FINAL, championship: CHAMPIONSHIP, timesTables: TIMES_TABLES };
 
-// The value of a numeric answer like "1,620", "$7.00", "4.5 liters", "3/8 cup" or "1 7/8 miles",
-// with its unit ("liter", "cup", "mile"). Null for anything else, like "(4, 12)" or "Rectangle".
+// The value of a numeric answer like "1,620", "$7.00", "4.5 liters", "3/8 cup", "1 7/8 miles" or "20%",
+// with its unit ("liter", "cup", "mile", "%"). Null for anything else, like "(4, 12)" or "Rectangle".
 function numeric(text) {
   const m = String(text).trim().replace(/,/g, '')
-    .match(/^\$?(?:(\d+)\s+(\d+)\/(\d+)|(\d+)\/(\d+)|(\d*\.?\d+))\s*([a-z ]*)$/i);
+    .match(/^\$?(?:(\d+)\s+(\d+)\/(\d+)|(\d+)\/(\d+)|(\d*\.?\d+))\s*([a-z %]*)$/i);
   if (!m) return null;
   const value = m[1] ? +m[1] + m[2] / m[3] : m[4] ? m[4] / m[5] : +m[6];
   return { value, unit: m[7].trim().toLowerCase().replace(/s$/, '') };
@@ -187,16 +187,18 @@ function numeric(text) {
 
 // How far a wrong answer is from the right one, as a fraction of the right answer
 // (0.05 = 5% off), or null if the answers aren't numbers that can be compared.
+// A typed answer has no unit, so it's compared with the number alone.
 export const howFarOff = (given, right) => {
   const g = numeric(given), r = numeric(right);
-  if (!g || !r || g.unit !== r.unit) return null;
+  if (!g || !r || (g.unit && g.unit !== r.unit)) return null;
   return Math.abs(g.value - r.value) / Math.max(Math.abs(r.value), 1e-9);
 };
 
 // Does a typed answer match? Commas and spaces don't matter, and 4.50 matches 4.5.
+// Units are left off when typing, so 6.3 matches "6.3 ounces" and 20 matches "20%".
 // Fractions have to match as written (so 2/4 doesn't count for 1/2).
 export const sameAnswer = (given, right) => {
-  const tidy = s => String(s).replace(/[,\s$]/g, '');
+  const tidy = s => String(s).replace(/\s*[a-z][a-z ]*$/i, '').replace(/[,\s$%]/g, '');
   const g = tidy(given), r = tidy(right);
   return g === r || (/^\d*\.?\d+$/.test(g) && /^\d*\.?\d+$/.test(r) && Number(g) === Number(r));
 };
