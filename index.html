@@ -350,6 +350,8 @@
       color: #004c54;
     }
     .quiz-foot { display: flex; justify-content: center; }
+    #quiz-odds { margin: 4px 0 0; font: bold clamp(12px, 3vmin, 15px) Arial, sans-serif; color: #00695c; }
+    #quiz.typed #quiz-odds { text-align: center; }
     #quiz-speak {
       font: bold clamp(12px, 3vmin, 15px) Arial, sans-serif;
       padding: 6px 14px;
@@ -680,6 +682,7 @@
       <div class="quiz-body">
         <div class="quiz-ask">
           <p id="quiz-q"></p>
+          <p id="quiz-odds"></p>
           <canvas id="quiz-graph" width="440" height="260" hidden></canvas>
         </div>
         <div id="quiz-choices"></div>

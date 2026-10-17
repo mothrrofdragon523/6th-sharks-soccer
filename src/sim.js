@@ -38,8 +38,9 @@ const GRAVITY = 196;
 const WIN_GOALS = 5;
 const POST_R = 1.4; // the posts and crossbar are 7 cm thick
 
-// Gabe's trick shots, coolest first: the closer his answer, the cooler the shot.
-//   right answer, one of GOAL_SHOTS. GOAL!
+// Gabe's trick shots, coolest first. Whether it goes in is decided by his scoring chance (see
+// scoringChance); when it misses, the closer his answer, the cooler the miss.
+//   scores after a right answer, one of GOAL_SHOTS. GOAL! (after a wrong one, a plain strike)
 //     header      flick it up and leap for a header
 //     volleyGoal  knee it up and volley it in
 //     strike      just hit it, low and hard, into the corner
@@ -75,9 +76,19 @@ const EAGLE_TRICK_RANGE = 320;     // ...from within 16 m
 const EAGLE_TRICK_REACH = 0.5;     // how much of the way across Gabe's keeper gets to one
 const EAGLE_TRICK_CATCH = 0.5;     // ...and how often he holds on to it rather than parrying it
 
-// No shooting from your own half. Past halfway, the further out the shot, the harder the question.
-export const SHOT_RANGE = { easy: 15, medium: 30 }; // metres from goal: up to 15 easy, up to 30 medium, beyond that hard
-export const shotLevel = metres => (metres <= SHOT_RANGE.easy ? 'easy' : metres <= SHOT_RANGE.medium ? 'medium' : 'hard');
+// He can shoot from anywhere. Where he shoots from is measured like a football yard line: the
+// fraction of the pitch between him and the goal he's attacking (0 = on the goal line, 1 = on his
+// own goal line). The pitch splits into thirds: easy questions in the third nearest goal, medium
+// in the middle, hard in the third nearest his own goal.
+export const shotLevel = fraction => (fraction < 1 / 3 ? 'easy' : fraction < 2 / 3 ? 'medium' : 'hard');
+// His chance of scoring: 90% from the "10-yard line", 80% from the 20, down to 10% from his own 10.
+// A right answer (first try) adds a boost for the question's level; a wrong one halves the chance.
+const ANSWER_BOOST = { easy: 0.05, medium: 0.1, hard: 0.15 };
+export function scoringChance(fraction, level, right) {
+  const base = 1 - fraction;
+  const chance = right ? base + (ANSWER_BOOST[level] || 0) : base / 2;
+  return Math.min(0.99, Math.max(0.01, chance));
+}
 // Stamina runs from 1 (fresh) to 0 (exhausted).
 const SPRINT_DRAIN = 1 / 4;   // a full bar lasts 4 seconds of sprinting
 const STAMINA_REGEN = 1 / 9;  // and takes 9 seconds to refill when not sprinting
@@ -259,14 +270,19 @@ export class Match {
       if (hasBall) this.humanPass(); else this.switchPlayer();
     } else if (key === 'b') {
       if (!hasBall) this.humanTackle();
-      else if (!this.canShoot(this.controlled)) this.showToast('CROSS HALFWAY TO SHOOT');
       else { this.charging = true; this.chargeStart = this.t; }
     }
   }
 
-  // Shots are only allowed once you've reached the halfway line
+  // Shots are only allowed once you've reached the halfway line (the Eagles' rule; Gabe can shoot
+  // from anywhere, and the further out he is, the lower his chance of scoring)
   canShoot(p) {
     return p.x * p.team.dir >= 0;
+  }
+
+  // How far up the pitch p is from the goal he's attacking: 0 on its goal line, 1 on his own
+  shotFraction(p) {
+    return Math.min(1, Math.max(0, (oppGoalX(p.team) - p.x) * p.team.dir / (F.right - F.left)));
   }
 
   // Metres from p to the middle of the goal he's attacking
@@ -310,10 +326,9 @@ export class Match {
     const me = this.controlled, m = this.move;
     // Aim with the joystick; with no aim, go for the far post.
     const aimY = m.mag > 0.2 ? m.y : (me.y < 0 ? 0.6 : -0.6);
-    if (!this.canShoot(me)) return;
     if (!this.askQuestions) { this.shoot(me, this.power(), aimY); return; }
-    // The question's difficulty depends on how far out he's shooting from
-    this.pendingShot = { shooter: me, aimY, distance: this.shotDistance(me) };
+    // The question's difficulty and his chance of scoring depend on how far out he's shooting from
+    this.pendingShot = { shooter: me, aimY, distance: this.shotDistance(me), fraction: this.shotFraction(me) };
     this.state = 'question';
   }
 

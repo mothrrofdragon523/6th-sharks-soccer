@@ -1,4 +1,4 @@
-import { Match, shotLevel, goalShot } from './sim.js';
+import { Match, shotLevel, goalShot, scoringChance } from './sim.js';
 import { View } from './view.js';
 import { Input } from './input.js';
 import { LEVELS } from './levels.js';
@@ -301,20 +301,26 @@ showMenuStep();
 const quiz = {
   el: $('quiz'), q: $('quiz-q'), level: $('quiz-level'), graph: $('quiz-graph'),
   choices: $('quiz-choices'), result: $('quiz-result'), verdict: $('quiz-verdict'),
-  why: $('quiz-why'), go: $('quiz-go'), speak: $('quiz-speak'), line: $('quiz-line'),
+  why: $('quiz-why'), go: $('quiz-go'), speak: $('quiz-speak'), line: $('quiz-line'), odds: $('quiz-odds'),
 };
 let current = null; // { question, correct: null | boolean, typed: digits entered so far }
 
 function askQuestion() {
   input.releaseAll();
-  const metres = Math.round(match.pendingShot.distance);
-  const question = deck.next(shotLevel(metres)); // homework ignores this and goes in worksheet order
-  current = { question, correct: null, typed: '', tries: 0, given: [] };
+  const { distance, fraction } = match.pendingShot;
+  const metres = Math.round(distance);
+  const zone = shotLevel(fraction);
+  const question = deck.next(zone); // homework ignores this and goes in worksheet order
+  // His chance of scoring from here, with a right answer and with a wrong one
+  const odds = { right: scoringChance(fraction, zone, true), wrong: scoringChance(fraction, zone, false) };
+  current = { question, odds, metres, correct: null, typed: '', tries: 0, given: [] };
   quiz.el.hidden = false;
   quiz.el.classList.toggle('has-graph', !!question.graph);
   quiz.q.textContent = question.q;
   quiz.level.textContent = question.tag || `${question.level.toUpperCase()} · ${metres} m`;
   quiz.level.className = `lvl-${question.level}`;
+  const pct = p => `${Math.round(p * 100)}%`;
+  quiz.odds.textContent = `Chance to score: ${pct(odds.right)} if you get it right, ${pct(odds.wrong)} if not`;
   quiz.graph.hidden = !question.graph;
   if (question.graph) drawGraph(quiz.graph, question.graph);
   quiz.result.hidden = true;
@@ -463,12 +469,19 @@ function attempt(given, right) {
   return true;
 }
 
-// The closer he got, the cooler the shot (see SHOTS in sim.js): right first time scores with a
-// header, a volley or a low strike; then a bicycle kick off the bar, a volley off the post, or a blast over the bar.
-// Answers that aren't numbers can't be "nearly right", so they get the volley.
+// Whether the shot goes in is a roll of the dice: his chance (current.odds) depends on how far out
+// he is, goes up with a right answer (first try) and halves with a wrong one.
+// It decides the shot (see SHOTS in sim.js): a right answer that scores is a header, a volley
+// or a low strike; a wrong one that scores just gets hit in. Misses are cooler the closer he got:
+// a bicycle kick off the bar, a volley off the post, or a blast over the bar. Answers that aren't
+// numbers can't be "nearly right", so they get the volley. Headers, volleys and bicycle kicks only
+// happen near goal (TRICK_RANGE); from further out it's a plain strike, into the net or over the bar.
+const TRICK_RANGE = 25; // metres
 function shotStyle(given, right, firstTry) {
-  if (firstTry) return goalShot();
-  if (right) return 'bicycle'; // homework: got there on a retry
+  const scores = Math.random() < (firstTry ? current.odds.right : current.odds.wrong);
+  if (current.metres > TRICK_RANGE) return scores ? 'strike' : 'blast';
+  if (scores) return firstTry ? goalShot() : 'strike';
+  if (right) return 'bicycle'; // right but unlucky, or homework: got there on a retry
   const off = howFarOff(given, current.question.rightAnswer);
   if (off === null) return 'volley';
   return off <= 0.1 ? 'bicycle' : off <= 0.5 ? 'volley' : 'blast';
@@ -510,7 +523,7 @@ function record(given, right) {
     });
   }
   quiz.verdict.textContent = firstTry ? 'Correct! ⚽'
-    : right ? `You got it! 👍 Get it on the first try to score.`
+    : right ? `You got it! 👍 Get it on the first try for the best chance to score.`
     : current.style === 'bicycle' ? `So close! It's ${question.rightAnswer}.`
     : `Not quite. It's ${question.rightAnswer}.`;
   quiz.verdict.className = right ? 'yes' : 'no';
@@ -597,9 +610,9 @@ function updateHud() {
     setText(hud.s, 'SPRINT');
   }
   hud.b.classList.toggle('defend', !attack && !keeper);
-  // SHOOT is greyed out in his own half; past halfway its ring shows how hard the question will be
+  // SHOOT's ring shows how hard the question will be from where he is
   const shooting = attack && !keeper;
-  const zone = shooting && match.canShoot(match.controlled) ? shotLevel(match.shotDistance(match.controlled)) : null;
+  const zone = shooting ? shotLevel(match.shotFraction(match.controlled)) : null;
   hud.b.classList.toggle('off', shooting && !zone);
   for (const lvl of ['easy', 'medium', 'hard']) hud.b.classList.toggle(`zone-${lvl}`, zone === lvl);
   hud.s.classList.toggle('off', !!(keeper && keeper.goalKick));
