@@ -143,6 +143,7 @@ const REVIEW_STATUS = {
   first: ['⭐ First try', 'first'],
   solved: ['✓ Got it', 'solved'],
   shown: ['Answer shown', 'shown'],
+  paper: ['✏️ Write this one on paper', 'paper'],
 };
 
 function showReview() {
@@ -150,7 +151,7 @@ function showReview() {
   review.title.textContent = homework.title;
   review.list.replaceChildren(...homework.problems.map(p => {
     const li = document.createElement('li');
-    const [label, cls] = REVIEW_STATUS[deck.status(p.n)] || ['Not asked yet', 'none'];
+    const [label, cls] = REVIEW_STATUS[p.paper ? 'paper' : deck.status(p.n)] || ['Not asked yet', 'none'];
     li.innerHTML = '<div class="review-top"><strong class="num"></strong><span class="chip"></span></div>'
       + '<p class="q"></p><p class="a">Answer: <strong></strong></p><p class="why"></p>';
     li.querySelector('.num').textContent = `#${p.n}`;
@@ -352,9 +353,10 @@ quiz.speak.addEventListener('click', () => {
 
 // Typed answers (Times Tables facts and some homework): an on-screen number pad, so no choices
 // give the answer away and the iPad keyboard doesn't pop up over the game. A keyboard's number
-// keys work too. Homework adds a decimal point and a fraction bar, and room for longer answers.
+// keys work too. Homework adds a decimal point, a fraction bar, a minus sign and a comma (for
+// lists like "−12, −1, 0, 3"), and room for longer answers.
 const KEYS = '0123456789';
-const HOMEWORK_KEYS = '0123456789./';
+const HOMEWORK_KEYS = '0123456789./−,';
 
 function showNumberPad() {
   const { homework } = current.question;
@@ -369,12 +371,17 @@ function showNumberPad() {
   };
   const pad = document.createElement('div');
   pad.className = 'pad';
-  pad.append(...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => key(n, () => typeKey(String(n)))));
-  if (homework) {
-    pad.append(key('.', () => typeKey('.')), key(0, () => typeKey('0')), key('/', () => typeKey('/')),
-      key('⌫', eraseDigit, 'erase'), key('✓', submitTyped, 'enter wide'));
+  const digit = n => key(n, () => typeKey(String(n)));
+  const sym = c => key(c, () => typeKey(c));
+  if (homework) { // four columns: the extra keys down the right-hand side
+    pad.classList.add('homework');
+    pad.append(digit(1), digit(2), digit(3), key('⌫', eraseDigit, 'erase'),
+      digit(4), digit(5), digit(6), sym('−'),
+      digit(7), digit(8), digit(9), sym(','),
+      sym('.'), digit(0), sym('/'), key('✓', submitTyped, 'enter'));
   } else {
-    pad.append(key('⌫', eraseDigit, 'erase'), key(0, () => typeKey('0')), key('✓', submitTyped, 'enter'));
+    pad.append(...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(digit),
+      key('⌫', eraseDigit, 'erase'), digit(0), key('✓', submitTyped, 'enter'));
   }
   quiz.choices.replaceChildren(entry, pad);
   showTyped();
@@ -390,8 +397,9 @@ function showTyped() {
 function typeKey(k) {
   if (!current || current.correct !== null) return;
   const { homework } = current.question;
+  if (k === '-') k = '−'; // a keyboard's hyphen is the minus sign
   if (!(homework ? HOMEWORK_KEYS : KEYS).includes(k)) return;
-  if (current.typed.length >= (homework ? 8 : 3)) return; // 12 × 12 = 144 is the biggest fact
+  if (current.typed.length >= (homework ? 14 : 3)) return; // 12 × 12 = 144 is the biggest fact
   current.typed = current.typed === '0' && k !== '.' ? k : current.typed + k;
   showTyped();
 }
@@ -406,7 +414,8 @@ function submitTyped() {
   if (!current || current.correct !== null || !current.typed) return;
   const entry = quiz.choices.querySelector('.entry');
   const given = current.typed;
-  const right = sameAnswer(given, current.question.rightAnswer);
+  const { rightAnswer, accept = [] } = current.question;
+  const right = [rightAnswer, ...accept].some(a => sameAnswer(given, a));
   if (!attempt(given, right)) { // try again: his wrong answer stays red until he types
     current.typed = '';
     entry.classList.add('wrong');

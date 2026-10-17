@@ -51,7 +51,7 @@ export const LEVELS = [
     icon: '📚',
     color: '#26a69a',
     desc: HOMEWORK.problems.length
-      ? `${HOMEWORK.title}: ${HOMEWORK.problems.length} problems from this week's homework, with 3 tries each`
+      ? `${HOMEWORK.title}: fill in the answers to this week's homework, with 3 tries each`
       : 'No homework loaded yet',
     questions: HOMEWORK,
     homework: HOMEWORK,

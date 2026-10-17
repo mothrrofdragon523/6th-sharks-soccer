@@ -435,7 +435,7 @@
     .pad-key:active:not(:disabled) { background: #e0f2f1; }
     .pad-key.erase { background: #eceff1; }
     .pad-key.enter { color: #fff; background: #004c54; border-color: #004c54; }
-    .pad-key.wide { grid-column: span 2; }
+    .pad.homework { grid-template-columns: repeat(4, clamp(54px, 15vmin, 84px)); }
     .pad-key:disabled { opacity: 0.45; cursor: default; }
     #quiz-result {
       display: flex;
@@ -573,6 +573,7 @@
     .review-top .chip.first { background: #f9a825; }
     .review-top .chip.solved { background: #43a047; }
     .review-top .chip.shown { background: #e53935; }
+    .review-top .chip.paper { background: #5c6bc0; }
 
     #error-box {
       position: fixed;
