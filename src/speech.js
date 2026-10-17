@@ -1,13 +1,14 @@
 // Read aloud: the device's own voice reads questions, answer choices and explanations,
-// so reading never gets in the way of the math. It's on unless he turns it off in the menu,
-// and the 🔊 button on the question card reads it again any time.
+// so reading never gets in the way of the math. The 🔊 button at the bottom of every
+// question card reads it whenever he wants. Reading every question out automatically is
+// off unless it's turned on in the menu (he didn't like it on all the time).
 
 const KEY = 'sss-read-aloud';
 export const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window;
 
 export function readAloudOn() {
   if (!canSpeak) return false;
-  try { return localStorage.getItem(KEY) !== 'off'; } catch { return true; }
+  try { return localStorage.getItem(KEY) === 'on'; } catch { return false; }
 }
 
 export function setReadAloud(on) {

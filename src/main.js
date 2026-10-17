@@ -282,7 +282,7 @@ $('pin').addEventListener('submit', e => {
 // Read aloud on or off, for whoever answers the questions on this device
 function showReadAloud() {
   $('read-aloud-wrap').hidden = !canSpeak || !player.questions;
-  $('read-aloud').textContent = `🔊 Read aloud: ${readAloudOn() ? 'On' : 'Off'}`;
+  $('read-aloud').textContent = `🔊 Read every question: ${readAloudOn() ? 'On' : 'Off'}`;
 }
 $('read-aloud').addEventListener('click', () => {
   unlockSpeech();

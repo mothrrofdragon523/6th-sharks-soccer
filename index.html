@@ -349,10 +349,10 @@
       font-size: clamp(12px, 3vmin, 16px);
       color: #004c54;
     }
-    .quiz-tags { display: flex; align-items: center; gap: 8px; }
+    .quiz-foot { display: flex; justify-content: center; }
     #quiz-speak {
       font: bold clamp(12px, 3vmin, 15px) Arial, sans-serif;
-      padding: 5px 10px;
+      padding: 6px 14px;
       color: #004c54;
       background: #e0f2f1;
       border: 2px solid #004c54;
@@ -675,7 +675,7 @@
     <div class="quiz-card">
       <div class="quiz-head">
         <span>⚽ SHOT ON GOAL!</span>
-        <span class="quiz-tags"><button id="quiz-speak" type="button" aria-label="Read it to me" hidden>🔊 Read it</button><span id="quiz-level"></span></span>
+        <span id="quiz-level"></span>
       </div>
       <div class="quiz-body">
         <div class="quiz-ask">
@@ -691,6 +691,7 @@
         </div>
         <button id="quiz-go"></button>
       </div>
+      <div class="quiz-foot"><button id="quiz-speak" type="button" hidden>🔊 Read it to me</button></div>
     </div>
   </div>
 
