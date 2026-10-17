@@ -140,7 +140,7 @@ export class Match {
           trickUntil: 0, trickReadyAt: 0, trickSide: 'L', tvx: 0, tvy: 0, tface: 0,
           spinUntil: 0, spin: null, spinBall: 0,
           diveUntil: 0, diveMoveUntil: 0, diveSpeed: 0, gkAct: null, release: null, faceBall: false,
-          lockUntil: 0, leapAt: -10, dragUntil: 0, dragSide: 1, ballTurn: 0,
+          lockUntil: 0, leapAt: -10, dragUntil: 0, dragAngle: 0, ballPull: 0, ballAngle: 0, ballReach: 1,
         };
         this.players.push(p);
         this.teams.get(team).push(p);
@@ -183,7 +183,7 @@ export class Match {
       p.fx = Math.cos(p.angle); p.fy = 0;
       p.noTouchUntil = 0; p.stunUntil = 0; p.lungeUntil = 0; p.tackleReadyAt = 0;
       p.diveUntil = 0; p.release = null; p.gkAct = null; p.trickUntil = 0; p.lockUntil = 0; p.spinUntil = 0;
-      p.dragUntil = 0; p.ballTurn = 0;
+      p.dragUntil = 0; p.ballPull = 0;
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
     }
@@ -711,7 +711,7 @@ export class Match {
     p.kickAt = this.t;
     p.kickType = 'poke';
     let win = p === this.controlled ? 0.45 : o === this.controlled ? 0.2 : 0.3;
-    let loose = 0.2;
+    let loose = 0.08; // only now and then does it squirt loose; usually he pulls it back out of reach
     if (this.t < o.trickUntil || this.t < o.dragUntil || this.t < o.spinUntil) { win *= 0.4; loose *= 0.5; } // harder mid-move
     const r = Math.random();
     if (r < win) this.steal(p);
@@ -734,11 +734,13 @@ export class Match {
     p.noTouchUntil = this.t + 0.2;
   }
 
-  // The player on the ball rolls it away from the defender's foot with the sole of his boot
+  // The player on the ball pulls it back toward himself with the sole of his boot and steps
+  // away from the defender, keeping the ball tucked in on the far side from the poke
   dragAway(o, from) {
     const lx = o.fy, ly = -o.fx; // his left
     const fromLeft = (from.x - o.x) * lx + (from.y - o.y) * ly > 0;
-    o.dragSide = fromLeft ? -1 : 1; // +1 = pull it to his left
+    const away = norm(o.x - from.x, o.y - from.y);
+    o.dragAngle = Math.atan2(away.y, away.x);
     o.dragUntil = this.t + DRAG_TIME;
     // Gabe keeps running if he's on the move; standing still, he plays the drag
     if (o !== this.controlled || Math.hypot(o.vx, o.vy) < 60) {
@@ -1054,15 +1056,14 @@ export class Match {
       else if (this.t < p.trickUntil) d = { vx: p.tvx, vy: p.tvy };
       else if (this.t < p.lungeUntil) d = { vx: p.lx * 300, vy: p.ly * 300 };
       else if (this.t < p.dragUntil && !steering && this.ball.owner === p) {
-        // Stepping back and across with the ball, away from the defender
-        const v = norm(p.fy * p.dragSide - p.fx * 0.6, -p.fx * p.dragSide - p.fy * 0.6);
-        d = { vx: v.x * 45, vy: v.y * 45 };
+        // Stepping back with the ball, away from the defender
+        d = { vx: Math.cos(p.dragAngle) * 70, vy: Math.sin(p.dragAngle) * 70 };
       }
       else if (this.t < p.stunUntil) { d.vx *= 0.25; d.vy *= 0.25; }
 
       const k = Math.min(1, dt * 10);
-      // The ball sits off to one side while he drags it away from a defender
-      p.ballTurn += ((this.t < p.dragUntil ? p.dragSide * 0.8 : 0) - p.ballTurn) * k;
+      // The ball comes back in under him while he pulls it away from a defender
+      p.ballPull += ((this.t < p.dragUntil && this.ball.owner === p ? 1 : 0) - p.ballPull) * k;
       p.vx += (d.vx - p.vx) * k;
       p.vy += (d.vy - p.vy) * k;
       p.x = clamp(p.x + p.vx * dt, F.left + PLAYER_R, F.right - PLAYER_R);
@@ -1079,6 +1080,7 @@ export class Match {
       else if (spinning) { p.angle = spinning.angle; p.spinBall = spinning.ball; target = p.angle; }
       else if (this.t < p.lockUntil) target = null;
       else if (this.t < p.trickUntil) target = p.tface;
+      else if (this.t < p.dragUntil && !steering && this.ball.owner === p) target = p.dragAngle + Math.PI; // facing the defender
       else if (steering && move.mag > 0.15) target = Math.atan2(move.y, move.x);
       else if (p.role === 'gk' && this.ball.owner === p) {
         // Turn to whoever it's going to
@@ -1113,8 +1115,14 @@ export class Match {
   updateBall(dt) {
     const b = this.ball, prevX = b.x;
     if (b.owner) {
-      const o = b.owner, off = PLAYER_R + BALL_R + 1;
-      const a = this.t < o.spinUntil ? o.spinBall : o.angle + o.ballTurn; // mid-spin it stays on his path
+      // In front of him; mid-spin it stays on his path; pulled back, it's tucked in on the far side from the defender
+      const o = b.owner;
+      let a = o.angle;
+      if (this.t < o.spinUntil) a = o.spinBall;
+      else if (o.ballPull > 0.01) a += Math.atan2(Math.sin(o.dragAngle - a), Math.cos(o.dragAngle - a)) * o.ballPull;
+      o.ballAngle = a;
+      o.ballReach = 1 - 0.35 * o.ballPull; // the view draws the ball here too
+      const off = (PLAYER_R + BALL_R + 1) * o.ballReach;
       b.x = o.x + Math.cos(a) * off;
       b.y = o.y + Math.sin(a) * off;
       b.z = 0; b.vz = 0;

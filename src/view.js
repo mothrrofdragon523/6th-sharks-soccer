@@ -816,10 +816,10 @@ export class View {
       bz = o.y * S + o.fy * 0.35;
       by = 1.1;
     } else if (b.owner && this.playerViews[0].model) {
-      // Realistic players dribble with the ball close to their feet (off to one side while dragging it)
-      const o = b.owner, a = o.angle + o.ballTurn;
-      bx = o.x * S + Math.cos(a) * 0.55;
-      bz = o.y * S + Math.sin(a) * 0.55;
+      // Realistic players dribble with the ball close to their feet (sim.js works out which side)
+      const o = b.owner, a = o.ballAngle, r = 0.55 * o.ballReach;
+      bx = o.x * S + Math.cos(a) * r;
+      bz = o.y * S + Math.sin(a) * r;
     }
     const dx = bx - this.lastBall.x, dz = bz - this.lastBall.y;
     const moved = Math.hypot(dx, dz);
