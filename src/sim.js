@@ -20,6 +20,10 @@ const GOAL_KICK_SETUP = 1.4; // time to put the ball down for a goal kick
 const TRICK_SPEED = 240;    // a quick burst, faster than sprinting (12 m/s)
 const TRICK_TIME = 0.45;    // ...for about 5 metres
 const TRICK_COOLDOWN = 1.2;
+// Trick with the ball: a Marseille turn. He rolls the ball back with the sole of one boot, spins
+// a full circle with his back to the defender, and rolls it on with the other, ending up past him.
+const SPIN_TIME = 0.8;
+const SPIN_SPEED = 150;     // about 6 m round the defender over the whole spin
 // Footplay: a defender who gets close stops charging in and jockeys (stays goal-side, facing the
 // ball) and jabs a foot at it now and then. The player on the ball drags it away from the poke.
 const JOCKEY_R = 90;               // a defender this close (4.5 m) starts jockeying
@@ -32,7 +36,10 @@ const WIN_GOALS = 5;
 const POST_R = 1.4; // the posts and crossbar are 7 cm thick
 
 // Gabe's trick shots, coolest first: the closer his answer, the cooler the shot.
-//   header   right answer: flick it up and leap for a header. GOAL!
+//   right answer, one of GOAL_SHOTS. GOAL!
+//     header      flick it up and leap for a header
+//     volleyGoal  knee it up and volley it in
+//     strike      just hit it, low and hard, into the corner
 //   bicycle  so close: flick it up, turn his back to goal and bicycle-kick it off the crossbar
 //   volley   close: knee it up and volley it off the post
 //   blast    a long way off: an ordinary strike that sails over the bar
@@ -43,9 +50,27 @@ export const SHOTS = {
   header: { setup: 'flick', popAt: 0.24, strike: 'header', lead: 0.6, contactAt: 1.14, contactZ: 38, reach: 5, outcome: 'goal', slowMo: true },
   bicycle: { setup: 'flick', popAt: 0.24, strike: 'bicycle', lead: 0.55, contactAt: 1.1, contactZ: 34, reach: -4, outcome: 'bar', backToGoal: true, slowMo: true, downFor: 2.0 },
   volley: { setup: 'knee', popAt: 0.25, strike: 'shoot', lead: 0.08, contactAt: 1.0, contactZ: 7, reach: 12, outcome: 'post' },
+  volleyGoal: { setup: 'knee', popAt: 0.25, strike: 'shoot', lead: 0.08, contactAt: 1.0, contactZ: 7, reach: 12, outcome: 'goal' },
+  strike: { outcome: 'goal' },
   blast: { outcome: 'over' },
 };
+// Which scoring shot a right answer gets, and how often
+const GOAL_SHOTS = [['header', 0.4], ['volleyGoal', 0.3], ['strike', 0.3]];
+export const goalShot = () => pickWeighted(GOAL_SHOTS);
+// Pick from [[thing, weight], ...] at random, by weight
+function pickWeighted(list) {
+  let r = Math.random() * list.reduce((t, [, w]) => t + w, 0);
+  for (const [item, w] of list) if ((r -= w) < 0) return item;
+  return list[list.length - 1][0];
+}
 const SLOW_MO = 0.35; // game speed around the moment a header or bicycle kick meets the ball
+// The Eagles try the same moves near goal, but theirs aren't decided by a math answer: each is
+// struck at goal like any shot, so it can go in, go wide, or be saved. Which move, how often:
+const EAGLE_SHOTS = [['header', 0.4], ['volley', 0.4], ['bicycle', 0.2]];
+const EAGLE_TRICK_SHOT = 0.3;      // chance a close-range Eagles shot is a trick shot
+const EAGLE_TRICK_RANGE = 320;     // ...from within 16 m
+const EAGLE_TRICK_REACH = 0.5;     // how much of the way across Gabe's keeper gets to one
+const EAGLE_TRICK_CATCH = 0.5;     // ...and how often he holds on to it rather than parrying it
 
 // No shooting from your own half. Past halfway, the further out the shot, the harder the question.
 export const SHOT_RANGE = { easy: 15, medium: 30 }; // metres from goal: up to 15 easy, up to 30 medium, beyond that hard
@@ -113,6 +138,7 @@ export class Match {
           holdUntil: 0, lungeUntil: 0, lx: 0, ly: 0, kickAt: -10,
           stamina: 1, exhausted: false, sprinting: false, kickType: 'pass',
           trickUntil: 0, trickReadyAt: 0, trickSide: 'L', tvx: 0, tvy: 0, tface: 0,
+          spinUntil: 0, spin: null, spinBall: 0,
           diveUntil: 0, diveMoveUntil: 0, diveSpeed: 0, gkAct: null, release: null, faceBall: false,
           lockUntil: 0, leapAt: -10, dragUntil: 0, dragSide: 1, ballTurn: 0,
         };
@@ -156,7 +182,7 @@ export class Match {
       p.angle = p.team.dir === 1 ? 0 : Math.PI;
       p.fx = Math.cos(p.angle); p.fy = 0;
       p.noTouchUntil = 0; p.stunUntil = 0; p.lungeUntil = 0; p.tackleReadyAt = 0;
-      p.diveUntil = 0; p.release = null; p.gkAct = null; p.trickUntil = 0; p.lockUntil = 0;
+      p.diveUntil = 0; p.release = null; p.gkAct = null; p.trickUntil = 0; p.lockUntil = 0; p.spinUntil = 0;
       p.dragUntil = 0; p.ballTurn = 0;
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
@@ -294,17 +320,20 @@ export class Match {
     this.pendingShot = null;
     this.state = 'play';
     if (this.ball.owner !== shooter) return;
-    if (style === 'blast' || !SHOTS[style]) this.scriptedShot(shooter, 'over', aimY);
+    const move = SHOTS[style];
+    if (!move) this.scriptedShot(shooter, 'over', aimY);
+    else if (!move.setup) this.scriptedShot(shooter, move.outcome, aimY, style); // a strike or a blast
     else this.startTrickShot(shooter, style, aimY);
   }
 
   // Play out a header, bicycle kick or volley. He stands his ground while the move plays,
   // and nobody can get to the ball until it's on its way.
-  startTrickShot(p, style, aimY) {
+  // real: an Eagles trick shot, struck for real at contact rather than following SHOTS' outcome.
+  startTrickShot(p, style, aimY, real = false) {
     const move = SHOTS[style];
     const gx = oppGoalX(p.team);
     const toGoal = Math.atan2(-p.y, gx - p.x);
-    this.trickShot = { p, style, move, aimY, t0: this.t, face: move.backToGoal ? toGoal + Math.PI : toGoal, struck: false, striking: false };
+    this.trickShot = { p, style, move, aimY, real, t0: this.t, face: move.backToGoal ? toGoal + Math.PI : toGoal, struck: false, striking: false };
     p.lockUntil = this.t + move.contactAt + (move.downFor || 0.35);
     if (style === 'header') p.leapAt = this.t + move.contactAt; // the view lifts him off the ground
     p.kickAt = this.t;
@@ -350,7 +379,28 @@ export class Match {
     this.timeScale = 1;
     b.lastTouch = p;
     p.noTouchUntil = this.t + 0.35;
-    this.aimBall(p.team, move.outcome, s.aimY);
+    if (s.real) this.trickStrike(p, s.style, s.aimY);
+    else this.aimBall(p.team, move.outcome, s.aimY);
+  }
+
+  // An Eagles header, volley or bicycle kick leaving his head or foot: a real shot at goal,
+  // aimed roughly where he wanted, that the keeper can save and that can miss.
+  trickStrike(p, style, aimY) {
+    const b = this.ball, gx = oppGoalX(p.team);
+    const side = aimY < 0 ? -1 : 1; // he goes for a corner, and now and then misses it
+    const ty = side * GOAL_HALF * (0.45 + Math.random() * 0.6);
+    const heightAtLine = Math.random() < 0.12 ? CROSSBAR + 20 : 4 + Math.random() * 30; // ...or clears the bar
+    const dx = gx - b.x, dy = ty - b.y, d = Math.hypot(dx, dy);
+    const speed = style === 'header' ? 480 : 620;
+    const T = d / speed;
+    b.owner = null;
+    b.vx = dx / d * speed;
+    b.vy = dy / d * speed;
+    b.vz = (heightAtLine - b.z + 0.5 * GRAVITY * T * T) / T;
+    b.scripted = false;
+    b.outcome = null;
+    b.style = style;
+    b.hitWood = false;
   }
 
   // If the question can't be shown, don't leave the game paused: take an ordinary shot instead.
@@ -363,9 +413,9 @@ export class Match {
   }
 
   // An ordinary strike whose result is already decided (outcome as in aimBall)
-  scriptedShot(p, outcome, aimY) {
+  scriptedShot(p, outcome, aimY, style = 'blast') {
     this.kick(p, oppGoalX(p.team) - p.x, -p.y, 500, 0);
-    this.ball.style = 'blast';
+    this.ball.style = style;
     this.aimBall(p.team, outcome, aimY);
     p.kickType = 'shoot';
   }
@@ -424,18 +474,14 @@ export class Match {
     if (type) this.keeperDistribute(gk, this.keeperAim, type);
   }
 
-  // With the ball: flick it over a player right in front of you, or cut past him.
+  // With the ball: spin round the nearest defender, keeping the ball.
   // Without it: dart round whoever is in the way.
   humanTrick() {
     const me = this.controlled, m = this.move;
     if (this.t < me.trickReadyAt) return;
     let dir = m.mag > 0.2 ? { x: m.x, y: m.y } : { x: me.fx, y: me.fy };
-    if (this.ball.owner === me) {
-      const o = this.blocker(me, dir, 75);
-      if (o && this.ahead(me, dir, o) > 0.9) { this.flick(me, dir, o); return; }
-    } else if (m.mag <= 0.2) {
-      dir = norm(this.ball.x - me.x, this.ball.y - me.y); // no direction given: head for the ball
-    }
+    if (this.ball.owner === me) { this.spin(me, dir); return; }
+    if (m.mag <= 0.2) dir = norm(this.ball.x - me.x, this.ball.y - me.y); // no direction given: head for the ball
     this.cut(me, dir);
   }
 
@@ -472,15 +518,36 @@ export class Match {
     if (o && dist(p, o) < 110 && o !== this.controlled && o.role !== 'gk') o.stunUntil = this.t + 0.45;
   }
 
-  // Pop the ball up over a player standing right in front, and run on to it
-  flick(p, dir, o) {
-    this.kick(p, dir.x, dir.y, 150, 140);
-    p.kickType = 'flick';
-    p.trickReadyAt = this.t + TRICK_COOLDOWN;
-    o.noTouchUntil = this.t + 0.8;
-    if (o !== this.controlled) o.stunUntil = this.t + 0.4;
-    this.ball.passTarget = p; // the computer's players chase their own flick
-    this.ball.passUntil = this.t + 2;
+  // The Marseille turn: step on the ball, spin a full circle with his back to the defender,
+  // and come out on the far side of him still on the ball, heading the way he was going.
+  // He goes round whichever side the defender isn't on, and the defender is wrong-footed
+  // (Gabe's own player never is: he has to react himself).
+  spin(p, dir) {
+    const o = this.blocker(p, dir, 160);
+    const left = { x: dir.y, y: -dir.x }; // the player's own left
+    const goLeft = o ? (o.x - p.x) * left.x + (o.y - p.y) * left.y < 0 : Math.random() < 0.5;
+    p.spin = { dir, side: goLeft ? left : { x: -left.x, y: -left.y }, face: Math.atan2(dir.y, dir.x),
+      turn: goLeft ? -1 : 1, foot: goLeft ? 'dragR' : 'dragL', switched: false, t0: this.t };
+    p.spinUntil = this.t + SPIN_TIME;
+    p.trickReadyAt = this.t + SPIN_TIME + TRICK_COOLDOWN;
+    p.nextDecision = p.spinUntil + 0.4; // the computer carries on with the ball for a moment after
+    p.kickAt = this.t;
+    p.kickType = p.spin.foot; // sole roll with the first foot
+    if (o && dist(p, o) < 110 && o !== this.controlled && o.role !== 'gk') o.stunUntil = this.t + 0.7;
+  }
+
+  // Mid-spin: where he's moving and which way he's facing. He goes sideways round the defender
+  // at first, then on in his original direction; the ball stays on that path, not where he faces.
+  spinStep(p) {
+    const s = p.spin, u = clamp((this.t - s.t0) / SPIN_TIME, 0, 1);
+    if (!s.switched && u >= 0.5) { // halfway round: roll it on with the other foot
+      s.switched = true;
+      p.kickAt = this.t;
+      p.kickType = s.foot === 'dragR' ? 'dragL' : 'dragR';
+    }
+    const v = norm(s.side.x * (1 - u) * 1.1 + s.dir.x * (0.35 + u), s.side.y * (1 - u) * 1.1 + s.dir.y * (0.35 + u));
+    const ease = u * u * (3 - 2 * u);
+    return { vx: v.x * SPIN_SPEED, vy: v.y * SPIN_SPEED, angle: s.face + s.turn * Math.PI * 2 * ease, ball: Math.atan2(v.y, v.x) };
   }
 
   humanTackle() {
@@ -645,7 +712,7 @@ export class Match {
     p.kickType = 'poke';
     let win = p === this.controlled ? 0.45 : o === this.controlled ? 0.2 : 0.3;
     let loose = 0.2;
-    if (this.t < o.trickUntil || this.t < o.dragUntil) { win *= 0.4; loose *= 0.5; } // harder mid-move
+    if (this.t < o.trickUntil || this.t < o.dragUntil || this.t < o.spinUntil) { win *= 0.4; loose *= 0.5; } // harder mid-move
     const r = Math.random();
     if (r < win) this.steal(p);
     else if (r < win + loose) this.knockLoose(p, o);
@@ -795,6 +862,7 @@ export class Match {
     const block = Math.abs(off) < 40 && z < 20;
     let move = clamp(off, -(block ? 26 : 45), block ? 26 : 45);
     if (b.scripted) move *= 0.35; // a right answer always beats him
+    else if (b.style && b.style !== 'blast') move *= EAGLE_TRICK_REACH; // an Eagles trick shot is hard to read
     p.gkAct = { type: block ? 'block' : 'dive', at: this.t, side: Math.sign(off) };
     p.diveDir = Math.sign(move);
     p.diveSpeed = Math.abs(move) / 0.5;
@@ -837,6 +905,15 @@ export class Match {
     }
     // Defending or loose ball: the closest player goes for it, the rest hold shape.
     if (this.nearestOutfield(team, b) === p) {
+      // A loose ball with someone in the way: sometimes dart round him, like Gabe can
+      if (!b.owner && this.t >= p.trickReadyAt && this.t >= p.nextDecision) {
+        p.nextDecision = this.t + 0.3;
+        const toBall = norm(b.x - p.x, b.y - p.y);
+        if (dist(p, b) < 220 && this.blocker(p, toBall, 90) && Math.random() < 0.3) {
+          this.cut(p, toBall);
+          return { vx: p.tvx, vy: p.tvy };
+        }
+      }
       return this.seek(p, b.x + b.vx * 0.2, b.y + b.vy * 0.2, AI_SPEED);
     }
     const [x, y] = this.coverSpot(p);
@@ -885,18 +962,24 @@ export class Match {
     const gx = oppGoalX(p.team);
     const dGoal = Math.hypot(gx - p.x, p.y);
     const opponents = this.teams.get(p.team === HOME ? AWAY : HOME);
+    if (this.t < p.spinUntil) return { vx: 0, vy: 0 }; // finish the spin first (spinStep moves him)
 
     if (this.t >= p.nextDecision) {
       p.nextDecision = this.t + 0.3;
       if (this.canShoot(p) && (dGoal < 320 || (dGoal < 480 && Math.random() < 0.2))) {
-        this.shoot(p, 0.55 + Math.random() * 0.35, (Math.random() * 2 - 1) * 0.9);
+        const aimY = (Math.random() * 2 - 1) * 0.9;
+        if (p.team === AWAY && dGoal < EAGLE_TRICK_RANGE && Math.random() < EAGLE_TRICK_SHOT) {
+          this.startTrickShot(p, pickWeighted(EAGLE_SHOTS), aimY, true);
+        } else {
+          this.shoot(p, 0.55 + Math.random() * 0.35, aimY);
+        }
         return { vx: 0, vy: 0 };
       }
-      // Someone in the way: sometimes try to get round him with a trick
+      // Someone in the way: sometimes spin round him, the same trick Gabe has
       const toGoal = norm(gx - p.x, -p.y);
       if (this.t >= p.trickReadyAt && this.blocker(p, toGoal, 90) && Math.random() < 0.35) {
-        this.cut(p, toGoal);
-        return { vx: p.tvx, vy: p.tvy };
+        this.spin(p, toGoal);
+        return { vx: 0, vy: 0 };
       }
       let pressure = Infinity, presser = null;
       for (const o of opponents) if (dist(p, o) < pressure) { pressure = dist(p, o); presser = o; }
@@ -924,7 +1007,7 @@ export class Match {
 
   aiTackles() {
     const o = this.ball.owner;
-    if (!o || o.role === 'gk' || this.t < o.trickUntil) return; // can't get a foot in mid-trick
+    if (!o || o.role === 'gk' || this.t < o.trickUntil || this.t < o.spinUntil) return; // can't get a foot in mid-trick
     for (const p of this.players) {
       if (p === this.controlled || p.team === o.team || p.role === 'gk') continue;
       if (dist(p, o) < POKE_R && this.t >= p.tackleReadyAt) {
@@ -965,7 +1048,9 @@ export class Match {
       } else {
         d = this.fieldAI(p);
       }
+      const spinning = this.t < p.spinUntil && this.ball.owner === p ? this.spinStep(p) : null;
       if (this.t < p.lockUntil) d = { vx: 0, vy: 0 }; // mid trick shot (or picking himself up after one)
+      else if (spinning) d = spinning;
       else if (this.t < p.trickUntil) d = { vx: p.tvx, vy: p.tvy };
       else if (this.t < p.lungeUntil) d = { vx: p.lx * 300, vy: p.ly * 300 };
       else if (this.t < p.dragUntil && !steering && this.ball.owner === p) {
@@ -991,6 +1076,7 @@ export class Match {
       let target = null;
       const facePoint = q => Math.atan2(q.y - p.y, q.x - p.x);
       if (this.trickShot && this.trickShot.p === p) target = this.trickShot.face;
+      else if (spinning) { p.angle = spinning.angle; p.spinBall = spinning.ball; target = p.angle; }
       else if (this.t < p.lockUntil) target = null;
       else if (this.t < p.trickUntil) target = p.tface;
       else if (steering && move.mag > 0.15) target = Math.atan2(move.y, move.x);
@@ -1012,7 +1098,8 @@ export class Match {
     for (let i = 0; i < this.players.length; i++) {
       for (let j = i + 1; j < this.players.length; j++) {
         const a = this.players[i], c = this.players[j];
-        if (a.team !== c.team && (this.t < a.trickUntil || this.t < c.trickUntil)) continue; // slipping past
+        const slipping = q => this.t < q.trickUntil || this.t < q.spinUntil;
+        if (a.team !== c.team && (slipping(a) || slipping(c))) continue; // slipping past
         const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy), min = PLAYER_R * 2;
         if (d < min && d > 0.01) {
           const push = (min - d) / 2, nx = dx / d, ny = dy / d;
@@ -1026,7 +1113,8 @@ export class Match {
   updateBall(dt) {
     const b = this.ball, prevX = b.x;
     if (b.owner) {
-      const o = b.owner, off = PLAYER_R + BALL_R + 1, a = o.angle + o.ballTurn;
+      const o = b.owner, off = PLAYER_R + BALL_R + 1;
+      const a = this.t < o.spinUntil ? o.spinBall : o.angle + o.ballTurn; // mid-spin it stays on his path
       b.x = o.x + Math.cos(a) * off;
       b.y = o.y + Math.sin(a) * off;
       b.z = 0; b.vz = 0;
@@ -1098,7 +1186,8 @@ export class Match {
     }
     if (!best) return;
     if (best.role === 'gk') {
-      if (Math.random() < (speed > 600 ? 0.6 : 0.95)) this.setOwner(best);
+      const eagleTrick = b.style && b.style !== 'blast' && b.lastTouch && b.lastTouch.team !== best.team;
+      if (Math.random() < (eagleTrick ? EAGLE_TRICK_CATCH : speed > 600 ? 0.6 : 0.95)) this.setOwner(best);
       else this.deflect(best);
     } else if (speed > 480 && b.lastTouch && b.lastTouch.team !== best.team) {
       this.deflect(best); // a hard shot gets blocked, not trapped

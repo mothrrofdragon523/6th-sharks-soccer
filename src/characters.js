@@ -23,7 +23,8 @@ export const CLIPS = {
   strafeL: 'jog strafe left',
   strafeR: 'jog strafe right',
   backpedal: 'jog backward',
-  // Trick button: a sharp cut past an opponent, or flicking the ball up over him
+  // Trick button: without the ball, a sharp cut past an opponent. (With it, the spin round
+  // him uses the dragR and dragL sole rolls above.) Trick shots start by flicking the ball up.
   cutL: 'jog forward diagonal (2)',
   cutR: 'jog forward diagonal',
   flick: 'kick up soccerball',

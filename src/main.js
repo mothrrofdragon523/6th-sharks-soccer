@@ -1,4 +1,4 @@
-import { Match, shotLevel } from './sim.js';
+import { Match, shotLevel, goalShot } from './sim.js';
 import { View } from './view.js';
 import { Input } from './input.js';
 import { LEVELS } from './levels.js';
@@ -454,11 +454,11 @@ function attempt(given, right) {
   return true;
 }
 
-// The closer he got, the cooler the shot (see SHOTS in sim.js): right first time is a header
-// that scores; then a bicycle kick off the bar, a volley off the post, or a blast over the bar.
+// The closer he got, the cooler the shot (see SHOTS in sim.js): right first time scores with a
+// header, a volley or a low strike; then a bicycle kick off the bar, a volley off the post, or a blast over the bar.
 // Answers that aren't numbers can't be "nearly right", so they get the volley.
 function shotStyle(given, right, firstTry) {
-  if (firstTry) return 'header';
+  if (firstTry) return goalShot();
   if (right) return 'bicycle'; // homework: got there on a retry
   const off = howFarOff(given, current.question.rightAnswer);
   if (off === null) return 'volley';
