@@ -41,7 +41,7 @@ export const HOMEWORK = {
       a: '12 hours', typed: true,
       why: 'Total miles ÷ miles per hour: 6,240 ÷ 520 = 12. Check: 520 × 12 = 6,240.' },
     { n: '7', skill: 'Decimal word problems', q: 'Telegraphs were used to send messages before the telephone was invented. A telegraph operator could interpret about 40 words sent in Morse code per minute. Approximately how many words sent in Morse code could the operator interpret in 12.5 seconds?',
-      a: '8 words', typed: true, accept: ['8.3', '8.33'],
+      a: '8 words', paper: true, // taken out of the game on 2026-10-21; he finishes it on paper
       why: 'A minute is 60 seconds, so that\'s 40 ÷ 60 ≈ 0.67 word each second. 12.5 × 0.67 ≈ 8 words. On paper, also say your strategy and tool (like dividing with paper and pencil) and why you chose it.' },
     { n: '8', skill: 'Dividing decimals', q: 'Which has a quotient of 0.6?', a: '0.204 ÷ 0.34',
       choices: ['0.204 ÷ 0.034', '0.204 ÷ 0.34', '2.04 ÷ 0.034', '2.04 ÷ 0.34'],
@@ -95,14 +95,12 @@ export class HomeworkDeck {
 
   // Same shape as QuestionDeck.next(). Goes in worksheet order from where he left off,
   // skipping problems he's already got right on the first try (unless he has them all),
-  // and the ones that are only done on paper.
+  // and the ones that are only done on paper. progress.next is a place in the whole worksheet
+  // (paper problems included), so marking a problem paper-only doesn't move where he is.
   next() {
-    const list = this.homework.problems.filter(p => !p.paper);
-    let i = this.progress.next % list.length;
-    for (let k = 0; k < list.length; k++) {
-      const j = (this.progress.next + k) % list.length;
-      if (this.progress.status[list[j].n] !== 'first') { i = j; break; }
-    }
+    const list = this.homework.problems;
+    const order = list.map((_, k) => (this.progress.next + k) % list.length).filter(j => !list[j].paper);
+    const i = order.find(j => this.progress.status[list[j].n] !== 'first') ?? order[0];
     this.progress.next = i + 1;
     this.save();
     const item = list[i];
