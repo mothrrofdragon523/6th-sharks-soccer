@@ -5,80 +5,69 @@
 //   q     the problem, word for word
 //   q     problems that lean on a picture get the picture's numbers written in
 //   a     the answer, written the way the worksheet wants it
-//   typed true: he fills in the answer on the number pad (digits . / − and commas). Homework
-//         should always be fill-in, so every problem he can answer with those keys is typed.
-//         A unit or % after the number is shown but not typed, so 6.3 matches "6.3 ounces".
+//   typed true: he fills in the answer on the number pad (digits . / − and commas), for
+//         problems that are fill-in on the page. A unit or % after the number is shown but not
+//         typed, so 6.3 matches "6.3 ounces".
+//   choices for problems with choices on the page (A–D, or a word box): the choices in the
+//         page's order, shown in that order. a is the right one.
 //   accept other typed answers that also count (optional)
 //   paper  true for a problem the pad can't check (like "describe the pattern"): it isn't asked
 //         in the game, but its example answer is in the answers list at the end
 //   why   a short explanation
 // A problem that asks two things is split in two (2B-1, 2B-2), so each has one answer.
 // Keep apostrophes out of the title: the progress sheet matches worksheets by it.
+// The Vocabulary box, in the page's order
+const VOCAB = ['sum', 'difference', 'divisor', 'dividend', 'equivalent', 'remainder'];
+
 export const HOMEWORK = {
-  title: 'Lesson 7.2 Percent of a Quantity',
+  title: 'Module 4 Review',
   problems: [
-    // Page 219
-    { n: '1', skill: 'Percent of a number', q: 'A football team scored 80% of a total of 500 points in its first 11 games. How many points is 80% of 500?', a: '400', typed: true,
-      why: 'Split 500 into ten 10% parts of 50. Eight parts: 8 × 50 = 400. (Shade 8 boxes of the model on your paper.)' },
-    { n: '2A', skill: 'Percent word problems', q: 'About 71% of Earth\'s surface is covered in water. Earth\'s surface is about 196,900,000 square miles. About how many square miles are covered in water?',
-      a: '139,799,000 square miles', typed: true,
-      why: '71% = 0.71, and 0.71 × 196,900,000 = 139,799,000.' },
-    { n: '2B-1', skill: 'Percent word problems', q: 'About 71% of Earth\'s surface is covered in water. About what percent is NOT covered in water?',
-      a: '29%', typed: true, why: 'The whole surface is 100%, and 100% − 71% = 29%.' },
-    { n: '2B-2', skill: 'Percent word problems', q: 'Earth\'s surface is about 196,900,000 square miles, and 29% of it is not covered in water. How many square miles is that?',
-      a: '57,101,000 square miles', typed: true,
-      why: '0.29 × 196,900,000 = 57,101,000. (Or 196,900,000 − 139,799,000 from 2A.)' },
-    { n: '3', skill: 'Percent word problems', q: 'A metal bar weighs 7.5 ounces. Silver is 84% of its weight. How much does the silver weigh?', a: '6.3 ounces', typed: true,
-      why: '84% = 0.84, and 0.84 × 7.5 = 6.3.' },
-    { n: '4', skill: 'Percent word problems', q: 'The same 7.5-ounce bar is 9% iron. How much does the iron weigh?', a: '0.675 ounce', typed: true,
-      why: '9% = 0.09, and 0.09 × 7.5 = 0.675. Keep all three decimal places to be precise.' },
-    { n: '5', skill: 'Percent of a number', q: 'Find 30% of 180.', a: '54', typed: true,
-      why: '10% of 180 is 18, so 30% is 3 × 18 = 54.' },
-    { n: '6A', skill: 'Finding 10%', q: '10% of 30 is ?', a: '3', typed: true, why: '10% means divide by 10: 30 ÷ 10 = 3.' },
-    { n: '6B', skill: 'Finding 10%', q: '10% of 47 is ?', a: '4.7', typed: true, why: '47 ÷ 10 = 4.7. The decimal point moves one place left.' },
-    { n: '6C', skill: 'Finding 10%', q: '10% of 240 is ?', a: '24', typed: true, why: '240 ÷ 10 = 24.' },
-    { n: '6D', skill: 'Finding 10%', q: '10% of 10.8 is ?', a: '1.08', typed: true, why: '10.8 ÷ 10 = 1.08. The decimal point moves one place left.' },
-    { n: '6E', skill: 'Finding 10%', q: 'Look at 6A to 6D. Describe the pattern you notice when you find 10% of a number.', paper: true,
-      a: 'Finding 10% is the same as dividing by 10, so the decimal point moves one place to the left.',
-      why: 'Look at your answers: 30 → 3, 47 → 4.7, 240 → 24, 10.8 → 1.08. Every time, the decimal point moved one place left.' },
-    { n: '7', skill: 'Percent of a number', q: '10% of 90 = ?', a: '9', typed: true, why: '90 ÷ 10 = 9.' },
-    { n: '8', skill: 'Percent of a number', q: '50% of 14 = ?', a: '7', typed: true, why: '50% is half. Half of 14 is 7.' },
-    { n: '9', skill: 'Percent of a number', q: '30% of 90 = ?', a: '27', typed: true, why: '10% of 90 is 9, so 30% is 3 × 9 = 27.' },
-    { n: '10', skill: 'Percent of a number', q: '80% of 40 = ?', a: '32', typed: true, why: '10% of 40 is 4, so 80% is 8 × 4 = 32.' },
-    // Page 220
-    { n: '11a', skill: 'Percent word problems', q: '140 people went to a movie. 40% bought popcorn. How many people bought popcorn?', a: '56', typed: true,
-      why: '10% of 140 is 14, so 40% is 4 × 14 = 56.' },
-    { n: '11b', skill: 'Percent word problems', q: '140 people went to a movie. 30% bought pretzels. How many people bought pretzels?', a: '42', typed: true,
-      why: '10% of 140 is 14, so 30% is 3 × 14 = 42.' },
-    { n: '11c', skill: 'Percent word problems', q: '140 people went to a movie. 10% bought pizza. How many people bought pizza?', a: '14', typed: true,
-      why: '10% of 140 is 140 ÷ 10 = 14.' },
-    { n: '12', skill: 'Percent word problems', q: 'A circle graph shows the winner of an election got 63% of the votes. There were 6,350 votes in all. About how many votes did the winner get?',
-      a: '4,000 votes', typed: true, accept: ['4000.5'],
-      why: '0.63 × 6,350 = 4,000.5, which is about 4,000. (That\'s choice C on your paper.)' },
-    { n: '13', skill: 'Percent word problems', q: 'There are 80 marbles in a bag. 30% of them are green. How many marbles are NOT green?', a: '56', typed: true,
-      why: '100% − 30% = 70% are not green. 10% of 80 is 8, so 70% is 7 × 8 = 56.' },
-    { n: '14', skill: 'Percent word problems', q: 'Lamar earns $150 in all. 40% of it is from moving furniture. How much did he earn moving furniture?',
-      a: '$60', typed: true,
-      why: '10% of 150 is 15, so 40% is 4 × 15 = 60. (That\'s choice B on your paper.)' },
-    { n: '15', skill: 'Finding the percent', q: 'Three of 15 judges voted for Barry. What percent of the judges voted for him?', a: '20%', typed: true,
-      why: '3/15 = 1/5, and 1/5 = 20/100 = 20%.' },
-    { n: '16', skill: 'Long division', q: 'A bakery puts 868 muffins into 31 boxes, the same number in each. How many muffins are in each box?', a: '28', typed: true,
-      why: '868 ÷ 31 = 28. Check: 31 × 28 = 868.' },
-    { n: '17', skill: 'Ordering integers', q: 'Order the numbers 0, 3, −12 and −1 from least to greatest. Use the − and , keys.',
-      a: '−12, −1, 0, 3', typed: true,
-      why: 'Negative numbers are less than 0, and −12 is farther below 0 than −1.' },
-    { n: '18', skill: 'Dividing decimals', q: '560 ÷ 1.4 = ? (Round to the nearest thousandth if you need to.)', a: '400', typed: true,
-      why: 'Multiply both by 10: 5,600 ÷ 14 = 400.' },
-    { n: '19', skill: 'Dividing decimals', q: '9.5 ÷ 500 = ? (Round to the nearest thousandth if you need to.)', a: '0.019', typed: true,
-      why: '9.5 ÷ 500 = 0.019. It comes out exactly, so no rounding.' },
-    { n: '20', skill: 'Dividing decimals', q: '0.80 ÷ 46 = ? (Round to the nearest thousandth.)', a: '0.017', typed: true,
-      why: '0.80 ÷ 46 = 0.01739… The ten-thousandths digit is 3, so round down to 0.017.' },
-    { n: '21', skill: 'Dividing decimals', q: '10.2 ÷ 100 = ? (Round to the nearest thousandth if you need to.)', a: '0.102', typed: true,
-      why: 'Dividing by 100 moves the decimal point 2 places left: 0.102.' },
-    { n: '22', skill: 'Dividing decimals', q: '0.72 ÷ 0.09 = ? (Round to the nearest thousandth if you need to.)', a: '8', typed: true,
-      why: 'Multiply both by 100: 72 ÷ 9 = 8.' },
-    { n: '23', skill: 'Dividing decimals', q: '13 ÷ 0.04 = ? (Round to the nearest thousandth if you need to.)', a: '325', typed: true,
-      why: 'Multiply both by 100: 1,300 ÷ 4 = 325.' },
+    // Vocabulary: choose the correct term from the Vocabulary box
+    { n: '1a', skill: 'Division vocabulary', q: 'In the problem 3.8 ÷ 0.7, the number 3.8 is the ____.', a: 'dividend', choices: VOCAB,
+      why: 'The dividend is the number being divided. In 3.8 ÷ 0.7, that\'s 3.8.' },
+    { n: '1b', skill: 'Division vocabulary', q: 'In the problem 3.8 ÷ 0.7, the number 0.7 is the ____.', a: 'divisor', choices: VOCAB,
+      why: 'The divisor is the number you divide by. In 3.8 ÷ 0.7, that\'s 0.7.' },
+    { n: '2', skill: 'Math vocabulary', q: 'The solution to an addition problem is called the ____.', a: 'sum', choices: VOCAB,
+      why: 'Adding gives a sum: in 4 + 5 = 9, the sum is 9.' },
+    { n: '3', skill: 'Math vocabulary', q: 'The solution to a subtraction problem is called the ____.', a: 'difference', choices: VOCAB,
+      why: 'Subtracting gives a difference: in 9 − 5 = 4, the difference is 4.' },
+    { n: '4', skill: 'Division vocabulary', q: 'Two division expressions that have the same value are ____.', a: 'equivalent', choices: VOCAB,
+      why: 'Equivalent means equal in value. 3.8 ÷ 0.7 and 38 ÷ 7 are equivalent.' },
+    // Concepts and Skills
+    { n: '5', skill: 'Adding decimals', q: 'The distance from Jose\'s home to school is 1.85 miles. The school is 2.34 miles from the local library, which is 1.9 miles from Jose\'s home. If Jose goes from his home to school, from school to the library, and then home, how far does he travel?',
+      a: '6.09 miles', typed: true,
+      why: 'Add all three trips, lining up the decimal points: 1.85 + 2.34 + 1.90 = 6.09.' },
+    { n: '6', skill: 'Dividing multi-digit numbers', q: 'An airplane flew a total of 6,240 miles. Its speed was 520 miles per hour. How many hours did the plane fly?',
+      a: '12 hours', typed: true,
+      why: 'Total miles ÷ miles per hour: 6,240 ÷ 520 = 12. Check: 520 × 12 = 6,240.' },
+    { n: '7', skill: 'Decimal word problems', q: 'Telegraphs were used to send messages before the telephone was invented. A telegraph operator could interpret about 40 words sent in Morse code per minute. Approximately how many words sent in Morse code could the operator interpret in 12.5 seconds?',
+      a: '8 words', typed: true, accept: ['8.3', '8.33'],
+      why: 'A minute is 60 seconds, so that\'s 40 ÷ 60 ≈ 0.67 word each second. 12.5 × 0.67 ≈ 8 words. On paper, also say your strategy and tool (like dividing with paper and pencil) and why you chose it.' },
+    { n: '8', skill: 'Dividing decimals', q: 'Which has a quotient of 0.6?', a: '0.204 ÷ 0.34',
+      choices: ['0.204 ÷ 0.034', '0.204 ÷ 0.34', '2.04 ÷ 0.034', '2.04 ÷ 0.34'],
+      why: 'Multiply both by 100: 0.204 ÷ 0.34 = 20.4 ÷ 34 = 0.6. (The others come to 6, 60 and 6.)' },
+    { n: '9A', skill: 'Decimal word problems', q: 'The ocean rises and falls each day due to tides. The Bay of Fundy in Canada has some of the highest tides in the world. Its tidewater rises about 53.478 feet and falls the same amount afterwards, twice a day. How many total feet does the tide rise and fall each day?',
+      a: '213.912 feet', typed: true,
+      why: 'Twice a day it rises 53.478 and falls 53.478, so that\'s 4 of them: 4 × 53.478 = 213.912. On paper, write the expression: 4 × 53.478.' },
+    { n: '9B', skill: 'Writing expressions', paper: true, q: 'Write an expression that can be used to find the total feet the tide rises and falls over a one-week period.',
+      a: '7 × (4 × 53.478)',
+      why: 'One day is 4 × 53.478 feet, and a week is 7 days.' },
+    { n: '9C', skill: 'Decimal word problems', q: 'The tide rises and falls 4 × 53.478 = 213.912 feet each day. How many total feet does the tide rise and fall over a one-week period?',
+      a: '1,497.384 feet', typed: true,
+      why: '7 days × 213.912 feet = 1,497.384 feet.' },
+    { n: '10', skill: 'Writing expressions', q: 'A 0.5-pound bunch of bananas costs $0.22 and 1 pound of oranges cost $2.39. If a person has $20, which expression could be used to determine how much change the person would get after purchasing the 0.5-pound bunch of bananas and 3.25 pounds of oranges?',
+      a: '20 − [0.22 + (3.25 × 2.39)]',
+      choices: ['20 − 0.22 + (2.39 × 3.25)', '0.22 + (2.39 × 3.25) − 20', '20 − [0.22 + (3.25 × 2.39)]', '0.22 + (0.5 × 3.25) − 20'],
+      why: 'Add up what\'s spent first (bananas $0.22 + 3.25 pounds of oranges at $2.39), then take all of it away from $20. The brackets keep the spending together.' },
+    { n: '11', skill: 'Dividing decimals', q: 'A bag of equally-sized rhinestones weighs 16 ounces. Each rhinestone weighs 0.016 ounce. If you have 2 bags of rhinestones, how many rhinestones do you have?',
+      a: '2,000 rhinestones', typed: true,
+      why: 'One bag: 16 ÷ 0.016 = 16,000 ÷ 16 = 1,000 rhinestones. Two bags: 2 × 1,000 = 2,000.' },
+    { n: '12', skill: 'Order of operations', q: 'What is the value of the expression? 7.09 − (1.36 × 4.125) + (3.28 ÷ 0.04)', a: '83.48',
+      choices: ['8.85', '9.68', '83.39', '83.48'],
+      why: 'Parentheses first: 1.36 × 4.125 = 5.61 and 3.28 ÷ 0.04 = 82. Then left to right: 7.09 − 5.61 = 1.48, and 1.48 + 82 = 83.48.' },
+    { n: '13', skill: 'Decimal word problems', q: 'Remy is saving money to buy a new video game console. The console costs $199.95. Remy makes $40.50 each week babysitting. How many total weeks will he need to babysit to save up enough money for the video game console?',
+      a: '5 weeks', typed: true,
+      why: '199.95 ÷ 40.50 ≈ 4.94, so 4 weeks isn\'t enough (4 × 40.50 = $162). He needs 5 weeks (5 × 40.50 = $202.50). Write this reasoning on paper.' },
   ],
 };
 
@@ -117,7 +106,7 @@ export class HomeworkDeck {
     this.progress.next = i + 1;
     this.save();
     const item = list[i];
-    const choices = item.typed ? [] : shuffle([item.a, ...item.wrong]);
+    const choices = item.typed ? [] : item.choices ? [...item.choices] : shuffle([item.a, ...item.wrong]);
     return {
       q: item.q, skill: item.skill, choices, answer: choices.indexOf(item.a), rightAnswer: item.a,
       typed: !!item.typed, accept: item.accept, why: item.why, graph: item.graph,

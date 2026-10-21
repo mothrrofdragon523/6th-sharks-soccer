@@ -70,6 +70,7 @@ export function speakable(text) {
     .replace(/°F/g, ' degrees')
     .replace(/[[{]/g, '(').replace(/[\]}]/g, ')')
     .replace(/…/g, '...')
+    .replace(/_{2,}/g, ' blank ')
     .replace(/\s+/g, ' ')
     .trim();
 }

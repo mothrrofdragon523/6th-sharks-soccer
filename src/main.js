@@ -333,7 +333,7 @@ function askQuestion() {
     const b = document.createElement('button');
     b.className = 'choice';
     b.innerHTML = '<span class="key"></span><span class="text"></span>';
-    b.querySelector('.key').textContent = 'ABCD'[i];
+    b.querySelector('.key').textContent = 'ABCDEF'[i];
     b.querySelector('.text').textContent = text;
     b.addEventListener('click', () => answer(i));
     return b;
@@ -344,7 +344,7 @@ function askQuestion() {
 function questionSpeech() {
   const { q, choices } = current.question;
   const ask = /[.?!]$/.test(q) && !/[=×÷+−] ?\?$/.test(q) ? q : `${q}.`; // a pause before the choices
-  return [ask, ...choices.map((c, i) => `${'ABCD'[i]}: ${c}.`)].join(' ');
+  return [ask, ...choices.map((c, i) => `${'ABCDEF'[i]}: ${c}.`)].join(' ');
 }
 
 function resultSpeech() {
@@ -447,9 +447,10 @@ function answer(i) {
   });
 }
 
-// Homework gives him 3 tries before showing the answer, with no clock, so he can work it out.
-// The shot only goes in if he gets it on the first try, so guessing through the choices doesn't score.
-const HOMEWORK_TRIES = 3;
+// Homework gives him 2 tries, with no clock: a wrong answer gets "try again", and after a second
+// miss it shows the right answer and how to get it, so he doesn't keep practising it wrong.
+// Only a right answer on the first try boosts his chance to score, so guessing doesn't pay.
+const HOMEWORK_TRIES = 2;
 
 // One go at the question. Returns false if he gets to try again, true once it's settled.
 function attempt(given, right) {
