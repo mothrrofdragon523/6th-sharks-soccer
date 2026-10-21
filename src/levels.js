@@ -50,9 +50,10 @@ export const LEVELS = [
     name: 'Homework',
     icon: '📚',
     color: '#26a69a',
-    desc: HOMEWORK.problems.length
-      ? `${HOMEWORK.title}: fill in the answers to this week's homework, with 3 tries each`
-      : 'No homework loaded yet',
+    desc: !HOMEWORK.problems.length ? 'No homework loaded yet'
+      : HOMEWORK.problems.every(p => p.notebook || p.paper)
+        ? `${HOMEWORK.title}: answer each question in your notebook, then take your shot`
+        : `${HOMEWORK.title}: fill in the answers to this week's homework, with 2 tries each`,
     questions: HOMEWORK,
     homework: HOMEWORK,
   },

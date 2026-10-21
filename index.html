@@ -350,6 +350,15 @@
       color: #004c54;
     }
     .quiz-foot { display: flex; justify-content: center; }
+    /* Notebook questions: write it in the notebook, then tap the button */
+    #quiz-choices:has(.notebook-done) { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .notebook-note { margin: 0; font: clamp(13px, 3.4vmin, 17px) Arial, sans-serif; color: #455a64; text-align: center; }
+    .notebook-done {
+      padding: clamp(10px, 2.6vmin, 14px) clamp(18px, 5vmin, 30px);
+      font: bold clamp(15px, 4vmin, 21px) Arial, sans-serif;
+      color: #fff; background: #26a69a; border: none; border-radius: 12px; cursor: pointer;
+    }
+    .notebook-done:disabled { opacity: 0.5; cursor: default; }
     #quiz-odds { margin: 4px 0 0; font: bold clamp(12px, 3vmin, 15px) Arial, sans-serif; color: #00695c; }
     #quiz.typed #quiz-odds { text-align: center; }
     #quiz-speak {

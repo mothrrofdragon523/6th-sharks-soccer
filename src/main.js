@@ -144,6 +144,7 @@ const REVIEW_STATUS = {
   solved: ['✓ Got it', 'solved'],
   shown: ['Answer shown', 'shown'],
   paper: ['✏️ Write this one on paper', 'paper'],
+  notebook: ['✏️ In your notebook', 'paper'],
 };
 
 function showReview() {
@@ -151,7 +152,7 @@ function showReview() {
   review.title.textContent = homework.title;
   review.list.replaceChildren(...homework.problems.map(p => {
     const li = document.createElement('li');
-    const [label, cls] = REVIEW_STATUS[p.paper ? 'paper' : deck.status(p.n)] || ['Not asked yet', 'none'];
+    const [label, cls] = REVIEW_STATUS[p.paper ? 'paper' : p.notebook ? (deck.status(p.n) ? 'notebook' : null) : deck.status(p.n)] || ['Not asked yet', 'none'];
     li.innerHTML = '<div class="review-top"><strong class="num"></strong><span class="chip"></span></div>'
       + '<p class="q"></p><p class="a">Answer: <strong></strong></p><p class="why"></p>';
     li.querySelector('.num').textContent = `#${p.n}`;
@@ -159,7 +160,8 @@ function showReview() {
     li.querySelector('.chip').classList.add(cls);
     li.querySelector('.q').textContent = p.q;
     li.querySelector('.a strong').textContent = p.a;
-    li.querySelector('.why').textContent = p.why;
+    li.querySelector('.why').textContent = p.why || '';
+    if (p.notebook) { li.querySelector('.a').remove(); li.querySelector('.why').remove(); } // his own words, no answer to copy
     return li;
   }));
   review.el.hidden = false;
@@ -320,7 +322,8 @@ function askQuestion() {
   quiz.level.textContent = question.tag || `${question.level.toUpperCase()} · ${metres} m`;
   quiz.level.className = `lvl-${question.level}`;
   const pct = p => `${Math.round(p * 100)}%`;
-  quiz.odds.textContent = `Chance to score: ${pct(odds.right)} if you get it right, ${pct(odds.wrong)} if not`;
+  quiz.odds.textContent = question.notebook ? `Chance to score: ${pct(odds.right)}` // no right or wrong here
+    : `Chance to score: ${pct(odds.right)} if you get it right, ${pct(odds.wrong)} if not`;
   quiz.graph.hidden = !question.graph;
   if (question.graph) drawGraph(quiz.graph, question.graph);
   quiz.result.hidden = true;
@@ -328,6 +331,7 @@ function askQuestion() {
   quiz.speak.hidden = !canSpeak;
   quiz.el.classList.toggle('typed', question.typed);
   if (readAloudOn()) say(questionSpeech());
+  if (question.notebook) { showNotebook(); return; }
   if (question.typed) { showNumberPad(); return; }
   quiz.choices.replaceChildren(...question.choices.map((text, i) => {
     const b = document.createElement('button');
@@ -356,6 +360,25 @@ quiz.speak.addEventListener('click', () => {
   if (!current) return;
   say(quiz.result.hidden ? questionSpeech() : resultSpeech());
 });
+
+// Notebook questions (like science): he writes the answer in his notebook and taps the button.
+// There's no right or wrong in the game; it counts as right, so he gets the right-answer chance.
+function showNotebook() {
+  const note = document.createElement('p');
+  note.className = 'notebook-note';
+  note.textContent = 'Write your answer in your notebook, then tap the button.';
+  const done = document.createElement('button');
+  done.className = 'notebook-done';
+  done.textContent = '✏️ I wrote it in my notebook';
+  done.addEventListener('click', notebookDone);
+  quiz.choices.replaceChildren(note, done);
+}
+
+function notebookDone() {
+  if (!current || current.correct !== null || !current.question.notebook) return;
+  quiz.choices.querySelector('.notebook-done').disabled = true;
+  attempt('written in notebook', true);
+}
 
 // Typed answers (Times Tables facts and some homework): an on-screen number pad, so no choices
 // give the answer away and the iPad keyboard doesn't pop up over the game. A keyboard's number
@@ -523,12 +546,13 @@ function record(given, right) {
       right: current.correct,
     });
   }
-  quiz.verdict.textContent = firstTry ? 'Correct! ⚽'
+  quiz.verdict.textContent = question.notebook ? 'Nice work! ✏️ Now take your shot.'
+    : firstTry ? 'Correct! ⚽'
     : right ? `You got it! 👍 Get it on the first try for the best chance to score.`
     : current.style === 'bicycle' ? `So close! It's ${question.rightAnswer}.`
     : `Not quite. It's ${question.rightAnswer}.`;
   quiz.verdict.className = right ? 'yes' : 'no';
-  quiz.why.textContent = question.why;
+  quiz.why.textContent = question.notebook ? '' : question.why;
   showNumberLine(firstTry ? null : findSubtraction(question.q, question.why));
   if (readAloudOn()) say(resultSpeech());
   quiz.go.textContent = current.correct ? 'SHOOT! ⚽' : 'Take the shot';
@@ -559,6 +583,10 @@ window.addEventListener('keydown', e => {
   if (!current) return;
   if (current.correct !== null) {
     if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat) { e.preventDefault(); takeShot(); }
+    return;
+  }
+  if (current.question.notebook) {
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) { e.preventDefault(); notebookDone(); }
     return;
   }
   if (current.question.typed) {
