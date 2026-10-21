@@ -30,9 +30,9 @@ const JOCKEY_R = 90;               // a defender this close (4.5 m) starts jocke
 const JOCKEY_GAP = 34;             // ...about 1.7 m off, between the ball and his goal
 const POKE_R = PLAYER_R * 2 + 18;  // close enough to get a foot to the ball
 const DRAG_TIME = 0.7;
-// A tackle between Gabe and an Eagle wins the ball this often, whichever of them is tackling.
-// (Between two computer players it's 0.3.) Raise it to make tackling easier for both sides.
-const TACKLE_WIN = 0.35;
+// How often a tackle between Gabe and an Eagle wins the ball: tilted a little in Gabe's favour,
+// so games are a bit easier than an even match. (Between two computer players it's 0.3.)
+const TACKLE_WIN = { gabe: 0.4, eagle: 0.3 }; // Gabe tackling an Eagle / an Eagle tackling Gabe
 const KEEPER_WAIT = 8; // Gabe's keeper throws it himself if nothing is chosen in this many seconds
 const GRAVITY = 196;
 const WIN_GOALS = 5;
@@ -728,7 +728,7 @@ export class Match {
   poke(p, o) {
     p.kickAt = this.t;
     p.kickType = 'poke';
-    let win = p === this.controlled || o === this.controlled ? TACKLE_WIN : 0.3;
+    let win = p === this.controlled ? TACKLE_WIN.gabe : o === this.controlled ? TACKLE_WIN.eagle : 0.3;
     let loose = 0.08; // only now and then does it squirt loose; usually he pulls it back out of reach
     if (this.t < o.trickUntil || this.t < o.dragUntil || this.t < o.spinUntil) { win *= 0.4; loose *= 0.5; } // harder mid-move
     const r = Math.random();
