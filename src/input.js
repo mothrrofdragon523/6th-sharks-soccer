@@ -1,11 +1,14 @@
 // Touch controls (floating joystick + buttons) and keyboard controls.
 // Screen up = away from the camera, so joystick directions map straight onto the pitch.
+// Button presses go to buttons.press / buttons.release (this device's team, or the host online).
 
 const KEY_BUTTONS = { KeyJ: 'a', KeyK: 'b', Space: 'b', ShiftLeft: 's', ShiftRight: 's', KeyL: 't' };
 
 export class Input {
-  constructor(match) {
+  constructor(match, buttons) {
     this.match = match;
+    this.press = buttons.press;
+    this.release = buttons.release;
     this.joy = { id: null, bx: 0, by: 0, x: 0, y: 0 };
     this.btnPointers = new Map();
     this.keys = new Set();
@@ -61,7 +64,7 @@ export class Input {
       const key = btn.dataset.key;
       this.btnPointers.set(e.pointerId, key);
       btn.classList.add('held');
-      this.match.press(key);
+      this.press(key);
       return;
     }
     if (e.clientX < window.innerWidth * 0.55 && this.joy.id === null) {
@@ -94,7 +97,7 @@ export class Input {
     if (key) {
       this.btnPointers.delete(e.pointerId);
       this.buttons[key].classList.remove('held');
-      this.match.release(key);
+      this.release(key);
     }
   }
 
@@ -102,20 +105,20 @@ export class Input {
     if (this.match.state === 'question') return; // the question screen has its own keys
     this.keys.add(e.code);
     const key = KEY_BUTTONS[e.code];
-    if (key) { e.preventDefault(); this.match.press(key); }
+    if (key) { e.preventDefault(); this.press(key); }
   }
 
   onKeyUp(e) {
     this.keys.delete(e.code);
     const key = KEY_BUTTONS[e.code];
-    if (key) this.match.release(key);
+    if (key) this.release(key);
   }
 
   releaseAll() {
     this.keys.clear();
     for (const key of ['a', 'b', 's', 't']) {
       this.buttons[key].classList.remove('held');
-      this.match.release(key);
+      this.release(key);
     }
     this.btnPointers.clear();
     this.joy.id = null;

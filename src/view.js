@@ -39,6 +39,7 @@ function canvasTexture(canvas, repeatX = 1, repeatY = 1) {
 export class View {
   constructor(canvas, match) {
     this.match = match;
+    this.team = HOME; // the team this device plays (the Eagles for one player in an online game)
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.scene = new THREE.Scene();
@@ -835,8 +836,9 @@ export class View {
     this.ballShadow.material.opacity = 0.3 * (1 - lift * 0.6);
     this.updateTrail(this.ballMesh.position);
 
-    // Control marker
-    const c = m.keeperAim || m.controlled; // while Gabe's keeper has the ball: who it's going to
+    // Control marker, for this device's team
+    const pilot = m.pilot(this.team);
+    const c = pilot && (pilot.keeperAim || pilot.controlled); // while your keeper has the ball: who it's going to
     const show = !!c && m.state !== 'menu';
     this.ring.visible = this.arrow.visible = show;
     if (show) {

@@ -304,6 +304,51 @@
     #pin-error { width: 100%; text-align: center; font: bold 15px Arial, sans-serif; color: #ff8a80; }
     #pin-error[hidden] { display: none; }
     #playing-as { font: clamp(12px, 3vmin, 15px) Arial, sans-serif; opacity: 0.9; }
+    #menu-note {
+      max-width: 34em;
+      padding: 6px 14px;
+      text-align: center;
+      font: bold clamp(13px, 3.2vmin, 16px) Arial, sans-serif;
+      color: #ffe082;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 8px;
+    }
+
+    /* 1 or 2 players, start or join an online game */
+    .cards { display: flex; gap: clamp(10px, 3vmin, 24px); }
+    .who-card small { font: clamp(11px, 2.8vmin, 14px) Arial, sans-serif; opacity: 0.8; }
+    .who-card.two { border-color: #fdd835; }
+    #join { display: flex; gap: 10px; align-items: center; }
+    #join[hidden] { display: none; }
+    #join-code {
+      width: 4.2em;
+      padding: 8px 12px;
+      font: bold clamp(26px, 8vmin, 40px) Arial, sans-serif;
+      letter-spacing: 8px;
+      text-align: center;
+      border: 3px solid #fdd835;
+      border-radius: 10px;
+    }
+    #join-go:disabled { opacity: 0.5; }
+    #hosting { text-align: center; }
+    #hosting p { margin: 4px 0 0; font: clamp(13px, 3.2vmin, 16px)/1.4 Arial, sans-serif; }
+    .code-label { font: bold clamp(12px, 3vmin, 15px) Arial, sans-serif; letter-spacing: 3px; opacity: 0.8; }
+    #host-code { font-size: clamp(48px, 17vmin, 104px); line-height: 1.05; letter-spacing: 0.15em; color: #fdd835; text-shadow: 0 3px 12px rgba(0, 0, 0, 0.6); }
+    #lobby { display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 1.6vmin, 10px); }
+    #lobby[hidden] { display: none; }
+    .matchup { display: flex; align-items: center; gap: clamp(10px, 3vmin, 22px); }
+    .matchup .side {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: clamp(110px, 26vmin, 170px);
+      padding: clamp(6px, 1.6vmin, 12px) 14px;
+      border-radius: 12px;
+      font-size: clamp(12px, 3vmin, 15px);
+    }
+    .matchup strong { font: bold clamp(16px, 4.6vmin, 24px) Arial, sans-serif; }
+    .matchup .vs { font-size: clamp(14px, 4vmin, 22px); opacity: 0.8; }
+    #menu-back { padding: 6px 16px; font-size: clamp(13px, 3.4vmin, 16px); }
     #switch-player {
       font: inherit;
       color: #6cc4ee;
@@ -359,6 +404,12 @@
       color: #fff; background: #26a69a; border: none; border-radius: 12px; cursor: pointer;
     }
     .notebook-done:disabled { opacity: 0.5; cursor: default; }
+    /* Online: watching Gabe answer on his own device (nothing here can be tapped) */
+    #quiz.watching .quiz-card { border-top-color: #fdd835; }
+    #quiz.watching .choice:disabled { opacity: 1; cursor: default; }
+    #quiz.watching .choice.off { opacity: 0.45; }
+    #quiz.watching #quiz-choices { pointer-events: none; }
+    #quiz.typed.watching #quiz-choices { display: flex; flex-direction: column; align-items: center; gap: 6px; }
     #quiz-odds { margin: 4px 0 0; font: bold clamp(12px, 3vmin, 15px) Arial, sans-serif; color: #00695c; }
     #quiz.typed #quiz-odds { text-align: center; }
     #quiz-speak {
@@ -664,6 +715,7 @@
   <div id="menu">
     <h1>6TH SHARK'S SOCCER</h1>
     <div id="menu-sub">Loading players…</div>
+    <div id="menu-note" hidden></div>
     <div id="who" hidden>
       <button id="who-gabe" class="who-card"><span class="icon">🦈</span>Gabe</button>
       <button id="who-guest" class="who-card"><span class="icon">👋</span>Guest</button>
@@ -674,18 +726,44 @@
       <button type="button" id="pin-cancel" class="pin-back">Back</button>
       <div id="pin-error" hidden>That's not it. Try again.</div>
     </form>
+    <div id="mode" class="cards" hidden>
+      <button id="mode-one" class="who-card"><span class="icon">🎮</span>1 Player<small>against the computer</small></button>
+      <button id="mode-two" class="who-card two"><span class="icon">🌐</span>2 Players<small>online, on two devices</small></button>
+    </div>
+    <div id="online" class="cards" hidden>
+      <button id="online-host" class="who-card two"><span class="icon">📣</span>Start a game<small>get a code to share</small></button>
+      <button id="online-join" class="who-card two"><span class="icon">🔢</span>Join a game<small>type in their code</small></button>
+    </div>
+    <form id="join" hidden autocomplete="off">
+      <input id="join-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" aria-label="Game code">
+      <button type="submit" id="join-go" class="pin-ok">Join</button>
+    </form>
+    <div id="hosting" hidden>
+      <div class="code-label">GAME CODE</div>
+      <div id="host-code"></div>
+      <p>On the other device, choose <strong>2 Players</strong> → <strong>Join a game</strong> and type in this code.</p>
+    </div>
+    <div id="lobby" hidden>
+      <div class="matchup">
+        <div class="side home"><span>SHARKS</span><strong id="lobby-home"></strong></div>
+        <div class="vs">VS</div>
+        <div class="side away"><span>EAGLES</span><strong id="lobby-away"></strong></div>
+      </div>
+      <button id="lobby-swap" type="button" class="pin-back">⇄ Swap teams</button>
+    </div>
     <div id="levels"></div>
     <div id="playing-as" hidden>
       Playing as <strong id="playing-as-name"></strong><span id="playing-as-note"></span>
       · <button id="switch-player" type="button">Switch player</button>
       <span id="read-aloud-wrap" hidden>· <button id="read-aloud" type="button"></button></span>
     </div>
+    <button id="menu-back" type="button" class="pin-back" hidden></button>
   </div>
 
   <div id="quiz" hidden>
     <div class="quiz-card">
       <div class="quiz-head">
-        <span>⚽ SHOT ON GOAL!</span>
+        <span id="quiz-title">⚽ SHOT ON GOAL!</span>
         <span id="quiz-level"></span>
       </div>
       <div class="quiz-body">

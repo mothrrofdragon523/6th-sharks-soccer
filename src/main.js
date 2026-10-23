@@ -1,6 +1,8 @@
-import { Match, shotLevel, goalShot, scoringChance } from './sim.js';
+import { Match, HOME, AWAY, shotLevel, goalShot, scoringChance } from './sim.js';
 import { View } from './view.js';
 import { Input } from './input.js';
+import { Link } from './net.js';
+import { snapshot, Mirror, SNAPSHOT_EVERY } from './sync.js';
 import { LEVELS } from './levels.js';
 import { QuestionDeck, drawGraph, sameAnswer, howFarOff } from './questions.js';
 import { HomeworkDeck } from './homework.js';
@@ -12,7 +14,15 @@ import { findSubtraction, numberLine } from './numberline.js';
 const $ = id => document.getElementById(id);
 const match = new Match();
 const view = new View($('scene'), match);
-const input = new Input(match);
+// Buttons work this device's team, or (on the joining device in an online game) go to the host
+const input = new Input(match, {
+  press: key => button('press', key),
+  release: key => button('release', key),
+});
+function button(type, key) {
+  if (online && !online.host) { if (online.playing) online.link.send({ type, key }); }
+  else match[type](myTeam, key);
+}
 window.game = { match, view }; // handy for poking at the game from the browser console
 
 // Kit check: open the game with ?kits in the address to line all 16 players up close to the
@@ -43,6 +53,9 @@ let stats = { right: 0, total: 0 };   // this game's answers
 let series = null;                    // { level, game, wins: { home, away }, done } during a Championship
 let game = null;                      // what the answer log records about this game
 let player = savedPlayer();           // who's playing on this device (Gabe or Guest)
+let myTeam = HOME;                    // the team this device plays (online, it can be the Eagles)
+let online = null;                    // an online game: { link, host, playing, sides } (see "2 Players online")
+let homeworkSeen = null;              // online: Gabe's homework progress, sent from his device
 
 let currentLevel = null;
 
@@ -52,14 +65,31 @@ function beginGame(level, questionSet, label) {
   stats = { right: 0, total: 0 };
   game = {
     player: player.name,
-    mode: series ? `Championship · Game ${series.game}` : level.name,
+    mode: (online ? '2 Players · ' : '') + (series ? `Championship · Game ${series.game}` : level.name),
     set: LEVELS.find(l => l.questions === questionSet).name, // which season's questions
     gameId: new Date().toISOString(),
   };
   flushLog(); // send anything left over from last time
-  match.askQuestions = player.questions; // only Gabe gets (and logs) math questions
-  match.startMatch(level);
+  // Only Gabe gets (and logs) math questions, on whichever device he's playing
+  match.setPilots(online
+    ? [HOME, AWAY].map(team => ({ team, questions: online.sides[sideOf(team)].questions }))
+    : [{ team: HOME, questions: player.questions }]);
   $('rule').textContent = label;
+  homeworkSeen = null;
+  if (online && !online.host) { shareHomework(); return; } // the host runs the match and sends it over
+  match.startMatch(level);
+  if (online) {
+    online.playing = true;
+    online.link.send({ type: 'start', level: level.id, game: series ? series.game : 0, label });
+    shareHomework();
+  }
+}
+
+// Online, Gabe's device tells the other one how he's doing on his homework, for its answers list
+function shareHomework() {
+  if (online && player.questions && currentLevel.homework) {
+    online.link.send({ type: 'homework', status: { ...deck.progress.status } });
+  }
 }
 
 function startLevel(level) {
@@ -89,24 +119,27 @@ function onGameOver() {
   if (game.ended) return; // count each game once
   game.ended = true;
   const { home, away } = match.score;
-  const won = home > away;
+  const won = myTeam === HOME ? home > away : away > home;
   let title = won ? 'YOU WIN!' : 'TOO BAD!';
   let seriesText = '';
   let mainLabel = won ? 'Play Again' : 'Try Again';
-  resultAction = () => startLevel(series ? series.level : currentLevel);
+  // Online, the joining device asks the host to start the next game
+  const askHost = () => online && online.link.send({ type: 'again' });
+  const guest = online && !online.host;
+  resultAction = guest ? askHost : () => startLevel(series ? series.level : currentLevel);
 
   if (series) {
-    series.wins[won ? 'home' : 'away']++;
+    series.wins[home > away ? 'home' : 'away']++;
     const { home: s, away: e } = series.wins;
     if (Math.max(s, e) >= 2) {
       series.done = true;
       title = won ? 'CHAMPIONS! 🏆' : 'TOO BAD!';
-      seriesText = won ? `The Sharks win the Championship ${s}–${e}!` : `The Eagles win the Championship ${e}–${s}.`;
+      seriesText = s > e ? `The Sharks win the Championship ${s}–${e}!` : `The Eagles win the Championship ${e}–${s}.`;
     } else {
       seriesText = s === e ? `The series is tied ${s}–${e}. On to Game ${series.game + 1}!`
         : s > e ? `Sharks lead the series ${s}–${e}` : `Eagles lead the series ${e}–${s}`;
       mainLabel = `Next Game ▶`;
-      resultAction = nextSeriesGame;
+      resultAction = guest ? askHost : nextSeriesGame;
     }
   }
 
@@ -130,7 +163,12 @@ function closeResult(action) {
   action();
 }
 result.main.addEventListener('click', () => closeResult(resultAction));
-result.menu.addEventListener('click', () => closeResult(() => { series = null; match.toMenu(); }));
+result.menu.addEventListener('click', () => closeResult(() => {
+  if (online) { online.link.send({ type: 'menu' }); backToLobby(); return; } // both go back to the lobby
+  series = null;
+  match.toMenu();
+  showMenuStep('mode');
+}));
 window.addEventListener('keydown', e => {
   if (result.el.hidden || !review.el.hidden || e.code !== 'Enter') return;
   e.preventDefault();
@@ -152,7 +190,9 @@ function showReview() {
   review.title.textContent = homework.title;
   review.list.replaceChildren(...homework.problems.map(p => {
     const li = document.createElement('li');
-    const [label, cls] = REVIEW_STATUS[p.paper ? 'paper' : p.notebook ? (deck.status(p.n) ? 'notebook' : null) : deck.status(p.n)] || ['Not asked yet', 'none'];
+    // Online, the other player sees how Gabe's doing from his device
+    const status = homeworkSeen ? homeworkSeen[p.n] || null : deck.status(p.n);
+    const [label, cls] = REVIEW_STATUS[p.paper ? 'paper' : p.notebook ? (status ? 'notebook' : null) : status] || ['Not asked yet', 'none'];
     li.innerHTML = '<div class="review-top"><strong class="num"></strong><span class="chip"></span></div>'
       + '<p class="q"></p><p class="a">Answer: <strong></strong></p><p class="why"></p>';
     li.querySelector('.num').textContent = `#${p.n}`;
@@ -217,7 +257,9 @@ function fireworksFrame(now) {
   requestAnimationFrame(fireworksFrame);
 }
 
-// ---------- Start menu: pick a season (difficulty) ----------
+// ---------- Start menu ----------
+// Who's playing on this device → 1 Player or 2 Players → for 1 Player, pick a season; for
+// 2 Players, start a game (and share its code) or join one, then pick a season in the lobby.
 const menu = $('menu');
 const levelList = $('levels');
 for (const level of LEVELS) {
@@ -229,7 +271,12 @@ for (const level of LEVELS) {
   card.innerHTML = `<span class="icon">${level.icon}</span><h2></h2><p></p>`;
   card.querySelector('h2').textContent = level.name;
   card.querySelector('p').textContent = level.desc;
-  card.addEventListener('click', () => { if (match.state === 'menu') { unlockSpeech(); startLevel(level); } });
+  card.addEventListener('click', () => {
+    if (match.state !== 'menu') return;
+    unlockSpeech();
+    if (online && !online.host) online.link.send({ type: 'pick', level: level.id }); // the host starts it
+    else startLevel(level);
+  });
   levelList.appendChild(card);
 }
 
@@ -238,36 +285,73 @@ let loaded = false;
 view.ready.finally(() => {
   loaded = true;
   for (const card of levelList.children) card.disabled = !!card.dataset.empty;
-  showMenuStep();
+  $('menu-sub').textContent = menuTitle(menuStep);
 });
 
-// ---------- Who's playing? Gabe (with his PIN) or a Guest ----------
-// The menu shows either the player picker, the PIN pad, or the seasons.
-function showMenuStep(step = player ? 'seasons' : 'who') {
-  $('who').hidden = step !== 'who';
-  $('pin').hidden = step !== 'pin';
-  levelList.hidden = step !== 'seasons';
-  $('playing-as').hidden = step !== 'seasons';
-  if (step === 'seasons') {
-    $('menu-sub').textContent = loaded ? 'Choose your season' : 'Loading players…';
+// The menu shows one step at a time
+const STEPS = ['who', 'pin', 'mode', 'online', 'join', 'hosting', 'lobby'];
+const BACK = { seasons: '‹ Back', online: '‹ Back', join: '‹ Back', hosting: 'Cancel', lobby: 'Leave game' };
+let menuStep = null;
+
+function menuTitle(step) {
+  if ((step === 'seasons' || step === 'lobby') && !loaded) return 'Loading players…';
+  return {
+    who: "Who's playing?",
+    pin: "Enter Gabe's PIN",
+    mode: 'How do you want to play?',
+    seasons: 'Choose your season',
+    online: 'Play against someone on another device',
+    join: 'Type in the code from the other device',
+    hosting: 'Getting a game code…',
+    lobby: 'Pick a season to kick off (either of you can)',
+  }[step];
+}
+
+// note: a line under the title, e.g. why we've come back here
+function showMenuStep(step = player ? 'mode' : 'who', note = '') {
+  menuStep = step;
+  for (const s of STEPS) $(s).hidden = s !== step;
+  levelList.hidden = step !== 'seasons' && step !== 'lobby';
+  $('playing-as').hidden = step !== 'mode' && step !== 'seasons';
+  $('menu-sub').textContent = menuTitle(step);
+  showNote(note);
+  $('menu-back').hidden = !BACK[step];
+  $('menu-back').textContent = BACK[step] || '';
+  if (step === 'mode' || step === 'seasons') {
     $('playing-as-name').textContent = player.name;
     $('playing-as-note').textContent = player.questions ? '' : ' (no math questions)';
     showReadAloud();
-  } else {
-    $('menu-sub').textContent = step === 'who' ? "Who's playing?" : "Enter Gabe's PIN";
   }
   if (step === 'pin') {
     $('pin-input').value = '';
     $('pin-error').hidden = true;
     $('pin-input').focus();
   }
+  if (step === 'join') {
+    $('join-code').value = '';
+    $('join-go').disabled = false;
+    $('join-code').focus();
+  }
+  if (step === 'lobby') showLobby();
+}
+
+function showNote(note) {
+  $('menu-note').textContent = note;
+  $('menu-note').hidden = !note;
 }
 
 function choosePlayer(p) {
   player = p;
   savePlayer(p);
-  showMenuStep('seasons');
+  showMenuStep('mode');
 }
+
+$('mode-one').addEventListener('click', () => showMenuStep('seasons'));
+$('mode-two').addEventListener('click', () => showMenuStep('online'));
+$('menu-back').addEventListener('click', () => {
+  if (menuStep === 'join' || menuStep === 'hosting') { leaveOnline(); showMenuStep('online'); }
+  else { leaveOnline(); showMenuStep('mode'); } // seasons, online, or leaving the lobby
+});
 
 $('who-gabe').addEventListener('click', () => showMenuStep('pin'));
 $('who-guest').addEventListener('click', () => choosePlayer(PLAYERS.guest));
@@ -299,16 +383,317 @@ $('switch-player').addEventListener('click', () => {
 });
 showMenuStep();
 
+// ---------- 2 Players online ----------
+// One device hosts: it runs the match and sends snapshots of it (sync.js). The other joins with
+// the code, sends its joystick and buttons, and draws the snapshots. Gabe can be on either device:
+// his questions are asked (and logged) on his own device, and only the shot goes to the host.
+// online.sides: { home, away }, each { name, questions, host } (host: on the hosting device)
+const mirror = new Mirror(match);
+const sideOf = team => (team === AWAY ? 'away' : 'home');
+const otherTeam = () => (myTeam === HOME ? AWAY : HOME);
+const nameOf = team => (online ? online.sides[sideOf(team)].name : player.name);
+
+function setTeam(team) {
+  myTeam = team;
+  view.team = team;
+}
+
+function goOnline(host) {
+  leaveOnline();
+  const link = new Link({
+    onOpen: () => { if (!host) link.send({ type: 'hello', name: player.name, questions: player.questions }); },
+    onMessage: msg => { try { onlineMessage(msg); } catch (e) { showError(e); } },
+    onClose: lostOpponent,
+  });
+  online = { link, host, playing: false, sides: null };
+  return link;
+}
+
+function leaveOnline() {
+  if (!online) return;
+  online.link.close(); // the other device notices it's gone
+  online = null;
+  mirror.reset();
+  setTeam(HOME);
+}
+
+// The other device left, or the connection dropped: back to the menu, wherever we were
+function lostOpponent() {
+  if (!online) return;
+  online = null;
+  mirror.reset();
+  setTeam(HOME);
+  endGameScreens();
+  series = null;
+  match.setPilots([{ team: HOME }]);
+  match.toMenu();
+  showMenuStep('mode', 'The other player left, or the connection dropped.');
+}
+
+// After a game, both devices go back to the lobby to pick the next one
+function backToLobby() {
+  endGameScreens();
+  series = null;
+  online.playing = false;
+  mirror.reset();
+  match.toMenu();
+  showMenuStep('lobby');
+}
+
+function endGameScreens() {
+  if (current) { current = null; stopSpeech(); }
+  stopWatching();
+  quiz.el.hidden = true;
+  result.el.hidden = true;
+  review.el.hidden = true;
+  stopFireworks();
+}
+
+$('online-host').addEventListener('click', async () => {
+  const link = goOnline(true);
+  showMenuStep('hosting');
+  $('host-code').textContent = '· · · ·';
+  try {
+    const code = await link.host();
+    if (!online || online.link !== link) return; // cancelled while waiting
+    $('host-code').textContent = code;
+    $('menu-sub').textContent = 'Waiting for the other player to join…';
+  } catch (e) {
+    if (!online || online.link !== link) return;
+    leaveOnline();
+    showMenuStep('online', e.message || "Couldn't start a game. Try again.");
+  }
+});
+
+$('online-join').addEventListener('click', () => showMenuStep('join'));
+$('join').addEventListener('submit', async e => {
+  e.preventDefault();
+  const code = $('join-code').value.trim();
+  if (!/^\d{4}$/.test(code)) { showNote('The code is 4 numbers.'); return; }
+  const link = goOnline(false);
+  $('join-go').disabled = true;
+  $('menu-sub').textContent = 'Connecting…';
+  showNote('');
+  try {
+    await link.join(code); // then the host sends the lobby
+  } catch (err) {
+    if (!online || online.link !== link) return;
+    leaveOnline();
+    showMenuStep('join', err.message || "Couldn't connect. Try again.");
+  }
+});
+
+// The lobby: who's on which team. Either player can swap the teams round.
+function showLobby() {
+  if (!online || !online.sides) return;
+  const label = s => `${s.name}${s.host === online.host ? ' (you)' : ''}`;
+  $('lobby-home').textContent = label(online.sides.home);
+  $('lobby-away').textContent = label(online.sides.away);
+}
+
+function sendLobby() {
+  online.link.send({ type: 'lobby', sides: online.sides });
+  useLobby(online.sides);
+}
+
+function useLobby(sides) {
+  online.sides = sides;
+  setTeam(sides.home.host === online.host ? HOME : AWAY);
+  if (menuStep === 'lobby') showLobby();
+}
+
+$('lobby-swap').addEventListener('click', () => {
+  if (!online || match.state !== 'menu') return;
+  if (online.host) swapSides(); else online.link.send({ type: 'swap' });
+});
+
+function swapSides() {
+  const { home, away } = online.sides;
+  online.sides = { home: away, away: home };
+  sendLobby();
+}
+
+function onlineMessage(msg) {
+  if (!online) return;
+  // Gabe's question card and homework progress come from whichever device he's on
+  if (msg.type === 'quiz') { if (msg.card) showWatching(msg.card); else stopWatching(); return; }
+  if (msg.type === 'homework') { if (!player.questions) homeworkSeen = msg.status; return; }
+  if (online.host) {
+    const them = otherTeam();
+    switch (msg.type) {
+      case 'hello': // someone joined
+        online.sides = {
+          home: { name: player.name, questions: player.questions, host: true },
+          away: { name: msg.name, questions: !!msg.questions, host: false },
+        };
+        sendLobby();
+        showMenuStep('lobby');
+        break;
+      case 'move': { const c = match.pilot(them); if (c) c.move = { x: msg.x, y: msg.y, mag: msg.mag }; break; }
+      case 'press': match.press(them, msg.key); break;
+      case 'release': match.release(them, msg.key); break;
+      case 'answer': // their question's answered: take the shot
+        if (match.state === 'question' && match.pendingShot && match.pendingShot.team === them) match.answerShot(msg.style);
+        break;
+      case 'skip': if (match.state === 'question') match.skipQuestion(); break;
+      case 'swap': if (match.state === 'menu') swapSides(); break;
+      case 'pick': { // they chose the season
+        const level = LEVELS.find(l => l.id === msg.level);
+        if (level && match.state === 'menu' && menuStep === 'lobby') startLevel(level);
+        break;
+      }
+      case 'again': if (!result.el.hidden) closeResult(resultAction); break; // Play Again / Next Game
+      case 'menu': backToLobby(); break;
+    }
+    return;
+  }
+  switch (msg.type) {
+    case 'lobby':
+      useLobby(msg.sides);
+      if (!online.playing && menuStep !== 'lobby') showMenuStep('lobby');
+      break;
+    case 'start': { // the host kicked off a game
+      const level = LEVELS.find(l => l.id === msg.level);
+      endGameScreens();
+      if (!msg.game) series = null;
+      else {
+        if (msg.game === 1 || !series) series = { level, game: 0, wins: { home: 0, away: 0 }, done: false };
+        series.game = msg.game;
+      }
+      mirror.reset();
+      online.playing = true;
+      beginGame(level, msg.game ? level.series[msg.game - 1] : level.questions, msg.label);
+      break;
+    }
+    case 'snap': if (online.playing) mirror.push(msg, performance.now()); break;
+    case 'menu': backToLobby(); break;
+  }
+}
+
+// The joining device sends its joystick when it changes (and now and then anyway)
+let sentMove = { x: 0, y: 0, mag: 0, at: 0 };
+function sendMove(move, now) {
+  const changed = Math.abs(move.x - sentMove.x) + Math.abs(move.y - sentMove.y) + Math.abs(move.mag - sentMove.mag) > 0.03;
+  if (!(changed && now - sentMove.at > 33) && now - sentMove.at < 300) return;
+  const r = v => Math.round(v * 100) / 100;
+  sentMove = { x: r(move.x), y: r(move.y), mag: r(move.mag), at: now };
+  online.link.send({ type: 'move', x: sentMove.x, y: sentMove.y, mag: sentMove.mag });
+}
+
+// ---------- Watching Gabe's questions ----------
+// Online, the other player sees Gabe's question card as he answers it (what he's asked, what he
+// taps or types, and the answer and explanation), in case he needs a hand. It's only to look at:
+// he answers on his own device. His device sends the card whenever anything on it changes.
+let sharedCard = 'null';
+let watching = false;
+
+function cardNow() {
+  if (!current || quiz.el.hidden) return null;
+  const { question } = current;
+  const mark = el => (el.classList.contains('right') ? 'right' : el.classList.contains('wrong') ? 'wrong' : '');
+  const entry = quiz.choices.querySelector('.entry');
+  return {
+    q: question.q, tag: quiz.level.textContent, lvl: quiz.level.className, odds: quiz.odds.textContent,
+    graph: question.graph || null,
+    kind: question.notebook ? 'notebook' : question.typed ? 'typed' : 'choices',
+    choices: [...quiz.choices.querySelectorAll('.choice')].map(b => ({ text: b.querySelector('.text').textContent, mark: mark(b), off: b.disabled })),
+    entry: entry && { text: entry.textContent, mark: mark(entry) },
+    result: quiz.result.hidden ? null : {
+      verdict: quiz.verdict.textContent, cls: quiz.verdict.className, why: quiz.why.textContent,
+      line: quiz.line.hidden ? null : current.line,
+    },
+  };
+}
+
+// Called every frame: send his card when it's changed (and that it's gone once he shoots)
+function shareCard() {
+  if (!online || !online.playing) return;
+  const card = JSON.stringify(cardNow());
+  if (card === sharedCard) return;
+  sharedCard = card;
+  online.link.send({ type: 'quiz', card: JSON.parse(card) });
+}
+
+function showWatching(card) {
+  if (current) return; // never over our own question
+  const first = !watching || quiz.q.textContent !== card.q;
+  watching = true;
+  quiz.el.hidden = false;
+  quiz.el.classList.add('watching');
+  quiz.el.classList.toggle('has-graph', !!card.graph);
+  quiz.el.classList.toggle('typed', card.kind === 'typed');
+  quiz.title.textContent = `👀 ${nameOf(otherTeam())}'s shot: watching`;
+  quiz.q.textContent = card.q;
+  quiz.level.textContent = card.tag;
+  quiz.level.className = card.lvl;
+  quiz.odds.textContent = card.odds;
+  quiz.graph.hidden = !card.graph;
+  if (card.graph && first) drawGraph(quiz.graph, card.graph);
+  quiz.speak.hidden = true;
+  quiz.go.hidden = true;
+  if (card.kind === 'choices') {
+    quiz.choices.replaceChildren(...card.choices.map((c, i) => {
+      const b = document.createElement('button');
+      b.className = `choice ${c.mark}`;
+      b.classList.toggle('off', c.off && !c.mark);
+      b.disabled = true;
+      b.innerHTML = '<span class="key"></span><span class="text"></span>';
+      b.querySelector('.key').textContent = 'ABCDEF'[i];
+      b.querySelector('.text').textContent = c.text;
+      return b;
+    }));
+  } else {
+    const note = document.createElement('p');
+    note.className = 'notebook-note';
+    if (card.kind === 'notebook') {
+      note.textContent = `${nameOf(otherTeam())} writes this answer in his notebook.`;
+      quiz.choices.replaceChildren(note);
+    } else {
+      const entry = document.createElement('div');
+      entry.className = `entry ${card.entry ? card.entry.mark : ''}`;
+      entry.textContent = card.entry ? card.entry.text : '?';
+      note.textContent = 'He types his answer on his number pad.';
+      quiz.choices.replaceChildren(entry, note);
+    }
+  }
+  const r = card.result;
+  quiz.result.hidden = !r;
+  if (r) {
+    quiz.verdict.textContent = r.verdict;
+    quiz.verdict.className = r.cls;
+    quiz.why.textContent = r.why;
+    quiz.line.hidden = !r.line;
+    if (r.line) {
+      const { svg, caption } = numberLine(r.line);
+      quiz.line.querySelector('.line-svg').innerHTML = svg;
+      quiz.line.querySelector('.line-caption').textContent = caption;
+    }
+  }
+}
+
+function stopWatching() {
+  if (!watching) return;
+  watching = false;
+  quiz.el.classList.remove('watching');
+  if (!current) quiz.el.hidden = true;
+}
+
+// Closing the page: tell the other device straight away rather than letting it wait
+window.addEventListener('pagehide', () => { if (online) online.link.close(); });
+
 // ---------- Shot questions: answer right and it's a goal, wrong and it misses ----------
 const quiz = {
   el: $('quiz'), q: $('quiz-q'), level: $('quiz-level'), graph: $('quiz-graph'),
   choices: $('quiz-choices'), result: $('quiz-result'), verdict: $('quiz-verdict'),
   why: $('quiz-why'), go: $('quiz-go'), speak: $('quiz-speak'), line: $('quiz-line'), odds: $('quiz-odds'),
+  title: $('quiz-title'),
 };
 let current = null; // { question, correct: null | boolean, typed: digits entered so far }
 
 function askQuestion() {
   input.releaseAll();
+  stopWatching();
+  quiz.title.textContent = '⚽ SHOT ON GOAL!';
   const { distance, fraction } = match.pendingShot;
   const metres = Math.round(distance);
   const zone = shotLevel(fraction);
@@ -521,6 +906,7 @@ function record(given, right) {
   if (current.correct) stats.right++;
   if (question.homework) {
     deck.done(question.n, firstTry ? 'first' : right ? 'solved' : 'shown');
+    shareHomework();
     logAnswer({
       kind: 'homework',
       player: game.player,
@@ -562,6 +948,7 @@ function record(given, right) {
 
 // Missed it? If there's a subtraction in it, show that step on a number line.
 function showNumberLine(sub) {
+  if (current) current.line = sub; // (for sharing his card online)
   quiz.line.hidden = !sub;
   if (!sub) return;
   const { svg, caption } = numberLine(sub);
@@ -575,7 +962,8 @@ function takeShot() {
   current = null;
   quiz.el.hidden = true;
   stopSpeech();
-  match.answerShot(style);
+  if (online && !online.host) online.link.send({ type: 'answer', style }); // the host takes the shot
+  else match.answerShot(style);
 }
 
 quiz.go.addEventListener('click', takeShot);
@@ -617,18 +1005,27 @@ function updateHud() {
   document.body.classList.toggle('in-menu', inMenu);
   setText(hud.score, `${match.score.home} – ${match.score.away}`);
 
-  hud.banner.hidden = !match.banner;
-  if (match.banner) {
-    setText(hud.bannerTitle, match.banner.title);
-    setText(hud.bannerSub, match.banner.sub);
+  // Online, while the other player answers a question, say so
+  let banner = match.banner;
+  const shot = match.pendingShot;
+  if (match.state === 'question' && shot && shot.team !== myTeam) {
+    banner = { title: 'SHOT ON GOAL!', sub: `${nameOf(shot.team)} is answering a question…` };
   }
-  hud.toast.hidden = !match.toast;
-  if (match.toast) setText(hud.toast, match.toast.text);
+  hud.banner.hidden = !banner;
+  if (banner) {
+    setText(hud.bannerTitle, banner.title);
+    setText(hud.bannerSub, banner.sub);
+  }
+  const toast = match.toast && (!match.toast.team || match.toast.team === myTeam) ? match.toast : null;
+  hud.toast.hidden = !toast;
+  if (toast) setText(hud.toast, toast.text);
 
+  const pilot = match.pilot(myTeam);
+  if (!pilot) return;
   // Buttons change between attacking and defending, like FC Mobile
-  // and become the keeper's choices while Gabe's keeper has the ball
-  const attack = match.attacking();
-  const keeper = match.gabesKeeper();
+  // and become the keeper's choices while your keeper has the ball
+  const attack = match.attacking(myTeam);
+  const keeper = match.pilotsKeeper(myTeam);
   if (keeper && keeper.goalKick) {
     setText(hud.a, 'SHORT'); setText(hud.b, 'LONG'); setText(hud.s, '');
   } else if (keeper) {
@@ -641,15 +1038,15 @@ function updateHud() {
   hud.b.classList.toggle('defend', !attack && !keeper);
   // SHOOT's ring shows how hard the question will be from where he is
   const shooting = attack && !keeper;
-  const zone = shooting ? shotLevel(match.shotFraction(match.controlled)) : null;
+  const me = pilot.controlled;
+  const zone = shooting ? shotLevel(match.shotFraction(me)) : null;
   hud.b.classList.toggle('off', shooting && !zone);
   for (const lvl of ['easy', 'medium', 'hard']) hud.b.classList.toggle(`zone-${lvl}`, zone === lvl);
   hud.s.classList.toggle('off', !!(keeper && keeper.goalKick));
   hud.t.classList.toggle('off', !!keeper);
-  hud.t.classList.toggle('tired', !keeper && match.t < match.controlled.trickReadyAt);
+  hud.t.classList.toggle('tired', !keeper && match.t < me.trickReadyAt);
 
   // Stamina bar over your player's head whenever it isn't full
-  const me = match.controlled;
   const showStamina = !inMenu && (me.stamina < 0.995 || me.sprinting);
   hud.stamina.hidden = !showStamina;
   if (showStamina) {
@@ -662,12 +1059,12 @@ function updateHud() {
   }
   hud.s.classList.toggle('tired', me.exhausted && !keeper);
 
-  hud.power.hidden = !match.charging;
-  if (match.charging) {
-    const pos = view.screenPos(match.controlled, 3.0);
+  hud.power.hidden = !pilot.charging;
+  if (pilot.charging) {
+    const pos = view.screenPos(me, 3.0);
     hud.power.style.left = `${pos.x}px`;
     hud.power.style.top = `${pos.y}px`;
-    const pw = match.power();
+    const pw = match.power(myTeam);
     hud.powerFill.style.width = `${pw * 100}%`;
     hud.powerFill.classList.toggle('max', pw > 0.85);
   }
@@ -695,31 +1092,54 @@ function updateDebug(now) {
   const b = match.ball;
   debugBox.textContent = [
     `state: ${match.state}  t: ${match.t.toFixed(1)}  fps: ${fps}`,
-    `player: ${player ? player.name : '-'}  questions: ${match.askQuestions}`,
-    `ball: ${b.owner ? `${b.owner.team.name} ${b.owner.num}` : 'loose'}  you: ${match.controlled.num}`,
+    `player: ${player ? player.name : '-'}  questions: ${player ? player.questions : '-'}  online: ${online ? (online.host ? 'host' : 'joined') : 'no'}`,
+    `ball: ${b.owner ? `${b.owner.team.name} ${b.owner.num}` : 'loose'}  you: ${myTeam.name} ${match.pilot(myTeam)?.controlled?.num}`,
     `question card: ${quiz.el.hidden ? 'hidden' : 'showing'}  zoom: ${window.visualViewport ? window.visualViewport.scale.toFixed(2) : '?'}`,
   ].join('\n');
 }
 
 let last = performance.now();
 let lastState = match.state;
+let lastSnap = 0;
 function frame(now) {
   requestAnimationFrame(frame); // first, so one bad frame can't stop the game
   try {
     const dt = Math.min(Math.max((now - last) / 1000, 0), 0.05);
     last = now;
-    match.move = input.readMove();
-    const gameDt = dt * match.timeScale; // slow motion for the big moments
-    match.update(gameDt);
+    const move = input.readMove();
+    let gameDt;
+    if (online && !online.host) {
+      // Joined an online game: draw the host's match, a moment behind, and send our joystick
+      gameDt = 0;
+      if (online.playing) {
+        const before = match.t;
+        if (mirror.apply(now)) gameDt = Math.min(Math.max(match.t - before, 0), 0.1); // slow motion comes with it
+        sendMove(move, now);
+      }
+    } else {
+      const mine = match.pilot(myTeam);
+      if (mine) mine.move = move;
+      gameDt = dt * match.timeScale; // slow motion for the big moments
+      match.update(gameDt);
+      if (online && online.playing && now - lastSnap >= SNAPSHOT_EVERY) {
+        lastSnap = now;
+        online.link.send(snapshot(match, now));
+      }
+    }
     if (match.state !== lastState) {
       lastState = match.state;
-      if (match.state === 'question') {
-        try { askQuestion(); } catch (e) { showError(e); quiz.el.hidden = true; current = null; match.skipQuestion(); }
+      // A question for whoever's playing on this device (online, the other one might be shooting)
+      if (match.state === 'question' && match.pendingShot && match.pendingShot.team === myTeam) {
+        try { askQuestion(); } catch (e) {
+          showError(e); quiz.el.hidden = true; current = null;
+          if (online && !online.host) online.link.send({ type: 'skip' }); else match.skipQuestion();
+        }
       }
-      if (match.state === 'over') onGameOver();
+      if (match.state === 'over' && game) onGameOver();
     }
     view.update(gameDt);
     updateHud();
+    shareCard();
     if (debugBox) updateDebug(now);
   } catch (e) {
     showError(e);
