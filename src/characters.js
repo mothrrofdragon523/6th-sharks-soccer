@@ -56,7 +56,7 @@ export const CLIPS = {
 };
 // Where to start each one-off move (seconds), so the foot meets the ball about when the game kicks it
 export const START = {
-  pass: 0.3, shoot: 0.35, poke: 0.05, dragR: 0.15, dragL: 0.15, flick: 0.4, header: 0.4, bicycle: 0.3, knee: 0,
+  pass: 0.05, shoot: 0.35, poke: 0.05, dragR: 0.15, dragL: 0.15, flick: 0.4, header: 0.4, bicycle: 0.3, knee: 0,
   gkCatch: 0.4, gkCatchChest: 0.1, gkCatchLeap: 1.0, gkCatchHigh: 0.35, gkScoop: 0.45,
   gkDiveL: 0.55, gkDiveR: 0.55, gkBlockL: 0.45, gkBlockL2: 0.6, gkBlockR: 0.4, gkMiss: 0.3,
   gkThrow: 0.3, gkDropKick: 1.0, gkRoll: 0.5,
