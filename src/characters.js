@@ -19,6 +19,12 @@ export const CLIPS = {
   poke: 'kick soccerball',
   dragR: 'stall soccerball (2)',  // right foot
   dragL: 'stall soccerball (3)',  // left foot
+  // A sliding tackle, and the player who's slid into falling over and getting back up (or, after
+  // a standing tackle, just stumbling: the first steps of the fall)
+  slide: 'soccer tackle (2)',
+  trip: 'soccer trip',
+  stumble: 'soccer trip',
+  getUp: 'standing up',
   // Shuffling while marking someone and watching the ball
   strafeL: 'jog strafe left',
   strafeR: 'jog strafe right',
@@ -62,9 +68,10 @@ export const START = {
   gkThrow: 0.3, gkDropKick: 1.0, gkRoll: 0.5,
 };
 // Playback speed for one-off moves (kicks default to 1.25, keeper moves to 1)
-export const PLAY_SPEED = { header: 1, bicycle: 1, knee: 1, poke: 1.4, dragR: 1.3, dragL: 1.3, gkDiveL: 1.3, gkDiveR: 1.3, gkBlockL: 1.3, gkBlockL2: 1.3, gkBlockR: 1.3, gkThrow: 1.2, gkDropKick: 1.3, gkRoll: 1.2, gkPlace: 1.3 };
-// Seconds to play of moves that go on longer than the game needs (just the drag, not the whole trick)
-export const PLAY_FOR = { dragR: 0.75, dragL: 0.75 };
+export const PLAY_SPEED = { slide: 1.25, trip: 1.4, getUp: 1.8, stumble: 1.2, header: 1, bicycle: 1, knee: 1, poke: 1.4, dragR: 1.3, dragL: 1.3, gkDiveL: 1.3, gkDiveR: 1.3, gkBlockL: 1.3, gkBlockL2: 1.3, gkBlockR: 1.3, gkThrow: 1.2, gkDropKick: 1.3, gkRoll: 1.2, gkPlace: 1.3 };
+// Seconds to play of moves that go on longer than the game needs (just the drag, not the whole
+// trick; the trip until he hits the grass, then getUp takes over; a stumble is the trip's first steps)
+export const PLAY_FOR = { dragR: 0.75, dragL: 0.75, trip: 0.75, stumble: 0.35 };
 // Metres per second each running animation was recorded at (measured on the model)
 export const ANIM_SPEED = { jog: 2.42, run: 5.29, sprint: 5.77, strafeL: 2.8, strafeR: 2.26, backpedal: 2.24, cutL: 2.56, cutR: 2.7, gkStepL: 2.2, gkStepR: 2.9 };
 
