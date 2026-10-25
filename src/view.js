@@ -4,7 +4,11 @@ import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, HOME, AWAY } from './sim.js';
 import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, PLAY_SPEED, PLAY_FOR, ANIM_SPEED } from './characters.js';
 
 const S = 0.05;                       // simulation units → metres
-const M = 60;                         // grass run-off around the pitch, in units
+const STRIDES = ['jog', 'run', 'sprint'];
+// How far through each running clip (0–1) the left leg swings furthest forward (measured from the
+// clips), so a change of pace stays in step
+const STRIDE_PHASE = { jog: 0.09, run: 0.09, sprint: 0.06 };
+const M = 60;                        // grass run-off around the pitch, in units
 const FIELD_W = (F.right - F.left) * S;
 const FIELD_H = (F.bottom - F.top) * S;
 const BALL_SIZE = 0.14;
@@ -147,13 +151,18 @@ export class View {
 
   // Blend smoothly from the current animation into another
   fadeTo(v, key, fade, { once = false, start = 0, speed = 1 } = {}) {
-    const next = v.actions[key];
+    const next = v.actions[key], prev = v.currentAction;
     if (v.current === key && !once) return;
-    if (v.currentAction && v.currentAction !== next) v.currentAction.fadeOut(fade);
+    if (prev && prev !== next) prev.fadeOut(fade);
     next.reset();
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     next.clampWhenFinished = once;
     next.time = start;
+    // Changing pace mid-run: pick up the new stride on the same foot, not from its first frame
+    if (STRIDES.includes(key) && STRIDES.includes(v.current)) {
+      const along = (prev.time / prev.getClip().duration + STRIDE_PHASE[key] - STRIDE_PHASE[v.current] + 1) % 1;
+      next.time = along * next.getClip().duration;
+    }
     next.timeScale = speed;
     next.setEffectiveWeight(1);
     next.fadeIn(fade).play();

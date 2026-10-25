@@ -13,6 +13,14 @@ const TOUCH_R = PLAYER_R + BALL_R + 4; // how close a player must be to control 
 const RUN_SPEED = 150;
 const SPRINT_SPEED = 200;
 const AI_SPEED = 140;
+// How players speed up, slow down and turn (units per second, per second)
+const ACCEL = 260;         // up to running pace in about half a second
+const SPRINT_ACCEL = 55;   // ...then building from a run to full sprint takes most of a second
+const PUSH_ACCEL = 170;    // except for a quick push-off as the sprint starts
+const PUSH_TIME = 0.12;    // ...worth about 1 m/s
+const BRAKE = 400;         // from a sprint to a stop in half a second
+const TURN_RATE = 9;       // radians per second he can swing his run round when slow...
+const TURN_LOSS = 0.55;    // ...and how much less at full sprint (wider turns)
 const KEEPER_SPEED = 140;
 // How long after starting each keeper move the ball leaves him (matches the animations)
 const KEEPER_RELEASE = { throw: 0.58, dropKick: 0.92, roll: 0.75 };
@@ -151,7 +159,7 @@ export class Match {
           x, y: spec.y, vx: 0, vy: 0, angle, fx: Math.cos(angle), fy: 0,
           noTouchUntil: 0, stunUntil: 0, tackleReadyAt: 0, nextDecision: 0,
           holdUntil: 0, lungeUntil: 0, lx: 0, ly: 0, kickAt: -10,
-          stamina: 1, exhausted: false, sprinting: false, kickType: 'pass',
+          stamina: 1, exhausted: false, sprinting: false, pushUntil: 0, kickType: 'pass',
           trickUntil: 0, trickReadyAt: 0, trickSide: 'L', tvx: 0, tvy: 0, tface: 0,
           spinUntil: 0, spin: null, spinBall: 0,
           diveUntil: 0, diveMoveUntil: 0, diveSpeed: 0, gkAct: null, release: null, faceBall: false,
@@ -1078,7 +1086,9 @@ export class Match {
       const c = this.pilots.get(p.team);
       const steering = !!c && p === c.controlled && !c.keeper;
       const move = steering ? c.move : null;
+      const wasSprinting = p.sprinting;
       p.sprinting = steering && c.held.s && move.mag > 0.1 && !p.exhausted;
+      if (p.sprinting && !wasSprinting) p.pushUntil = this.t + PUSH_TIME;
       if (p.sprinting) {
         p.stamina -= SPRINT_DRAIN * dt;
         if (p.stamina <= 0) { p.stamina = 0; p.exhausted = true; p.sprinting = false; }
@@ -1099,6 +1109,7 @@ export class Match {
         d = this.fieldAI(p);
       }
       const spinning = this.t < p.spinUntil && this.ball.owner === p ? this.spinStep(p) : null;
+      let running = false;
       if (this.t < p.lockUntil) d = { vx: 0, vy: 0 }; // mid trick shot (or picking himself up after one)
       else if (spinning) d = spinning;
       else if (this.t < p.trickUntil) d = { vx: p.tvx, vy: p.tvy };
@@ -1107,13 +1118,19 @@ export class Match {
         // Stepping back with the ball, away from the defender
         d = { vx: Math.cos(p.dragAngle) * 70, vy: Math.sin(p.dragAngle) * 70 };
       }
-      else if (this.t < p.stunUntil) { d.vx *= 0.25; d.vy *= 0.25; }
+      else {
+        running = p.role !== 'gk'; // tricks and keepers keep their snappy moves
+        if (this.t < p.stunUntil) { d.vx *= 0.25; d.vy *= 0.25; }
+      }
 
       const k = Math.min(1, dt * 10);
       // The ball comes back in under him while he pulls it away from a defender
       p.ballPull += ((this.t < p.dragUntil && this.ball.owner === p ? 1 : 0) - p.ballPull) * k;
-      p.vx += (d.vx - p.vx) * k;
-      p.vy += (d.vy - p.vy) * k;
+      if (running) this.runToward(p, d, dt);
+      else {
+        p.vx += (d.vx - p.vx) * k;
+        p.vy += (d.vy - p.vy) * k;
+      }
       p.x = clamp(p.x + p.vx * dt, F.left + PLAYER_R, F.right - PLAYER_R);
       p.y = clamp(p.y + p.vy * dt, F.top + PLAYER_R, F.bottom - PLAYER_R);
       if (p.role === 'gk') {
@@ -1129,7 +1146,10 @@ export class Match {
       else if (this.t < p.lockUntil) target = null;
       else if (this.t < p.trickUntil) target = p.tface;
       else if (this.t < p.dragUntil && !steering && this.ball.owner === p) target = p.dragAngle + Math.PI; // facing the defender
-      else if (steering && move.mag > 0.15) target = Math.atan2(move.y, move.x);
+      else if (steering && move.mag > 0.15) {
+        // On the move he faces where he's actually going (planting to turn back, he still faces forward)
+        target = Math.hypot(p.vx, p.vy) > 60 ? Math.atan2(p.vy, p.vx) : Math.atan2(move.y, move.x);
+      }
       else if (p.role === 'gk' && this.ball.owner === p) {
         // Turn to whoever it's going to
         const to = p.release ? p.release.mate : c && p === c.keeper ? c.keeperAim : null;
@@ -1158,6 +1178,28 @@ export class Match {
         }
       }
     }
+  }
+
+  // Speed up, slow down and turn like a real runner: quick off the mark, a short push-off into a
+  // sprint and then building to top speed, and wider turns the faster he's going.
+  runToward(p, d, dt) {
+    const want = Math.hypot(d.vx, d.vy);
+    let s = Math.hypot(p.vx, p.vy);
+    let a = Math.atan2(p.vy, p.vx), target = want;
+    if (want > 1) {
+      const ta = Math.atan2(d.vy, d.vx);
+      const off = Math.abs(Math.atan2(Math.sin(ta - a), Math.cos(ta - a)));
+      if (s < 40) a = ta; // nearly stopped: he can set off any way
+      else if (off > 2) target = 0; // doubling back: plant and stop first
+      else {
+        a = rotateTo(a, ta, TURN_RATE * (1 - TURN_LOSS * Math.min(1, s / SPRINT_SPEED)) * dt);
+        target *= 1 - 0.3 * Math.min(1, off / (Math.PI / 2)); // easing off into a sharp cut
+      }
+    }
+    if (target < s) s = Math.max(target, s - BRAKE * dt);
+    else s = Math.min(target, s + Math.max(s < RUN_SPEED ? ACCEL : SPRINT_ACCEL, this.t < p.pushUntil ? PUSH_ACCEL : 0) * dt);
+    p.vx = Math.cos(a) * s;
+    p.vy = Math.sin(a) * s;
   }
 
   updateBall(dt) {
