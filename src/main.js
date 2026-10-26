@@ -768,9 +768,10 @@ function notebookDone() {
 // Typed answers (Times Tables facts and some homework): an on-screen number pad, so no choices
 // give the answer away and the iPad keyboard doesn't pop up over the game. A keyboard's number
 // keys work too. Homework adds a decimal point, a fraction bar, a minus sign and a comma (for
-// lists like "−12, −1, 0, 3"), and room for longer answers.
+// lists like "−12, −1, 0, 3"; or a colon instead, when the answer is a ratio like 2:5), and room
+// for longer answers.
 const KEYS = '0123456789';
-const HOMEWORK_KEYS = '0123456789./−,';
+const HOMEWORK_KEYS = '0123456789./−,:';
 
 function showNumberPad() {
   const { homework } = current.question;
@@ -789,9 +790,10 @@ function showNumberPad() {
   const sym = c => key(c, () => typeKey(c));
   if (homework) { // four columns: the extra keys down the right-hand side
     pad.classList.add('homework');
+    const ratio = String(current.question.rightAnswer).includes(':');
     pad.append(digit(1), digit(2), digit(3), key('⌫', eraseDigit, 'erase'),
       digit(4), digit(5), digit(6), sym('−'),
-      digit(7), digit(8), digit(9), sym(','),
+      digit(7), digit(8), digit(9), sym(ratio ? ':' : ','),
       sym('.'), digit(0), sym('/'), key('✓', submitTyped, 'enter'));
   } else {
     pad.append(...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(digit),
