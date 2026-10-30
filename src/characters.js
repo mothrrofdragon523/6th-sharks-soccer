@@ -108,6 +108,7 @@ export async function loadCharacters() {
 
   const parts = {};
   base.traverse(o => { if (o.isMesh) parts[o.name] = o; });
+  await lighten(base);
   base.updateMatrixWorld(true);
   const height = new THREE.Box3().setFromObject(base).getSize(new THREE.Vector3()).y;
 
@@ -140,6 +141,40 @@ export async function loadCharacters() {
     shirtImage: await imageOf(parts.Tops.material.map),
     shortsImage: await imageOf(parts.Bottoms.material.map),
   };
+}
+
+// The model comes with big textures (2048-pixel eyes and eyelashes, 1024 everywhere else) plus
+// bump and shine maps: over 200 MB of graphics memory, too much for an iPad, for players that are
+// a few dozen pixels tall. Shrink them before they're drawn, and drop the bump and shine.
+const TEXTURE_MAX = 512;
+const TINY_PARTS = { Eyes: 128, Eyelashes: 128 };
+
+async function lighten(base) {
+  const shrinks = [];
+  base.traverse(o => {
+    if (!o.isMesh) return;
+    for (const mat of [].concat(o.material)) {
+      for (const k of ['normalMap', 'specularMap', 'bumpMap']) {
+        if (mat[k]) { mat[k].dispose(); mat[k] = null; }
+      }
+      for (const k of ['map', 'alphaMap']) {
+        if (mat[k]) shrinks.push(shrink(mat[k], TINY_PARTS[o.name] || TEXTURE_MAX));
+      }
+      mat.needsUpdate = true;
+    }
+  });
+  await Promise.all(shrinks);
+}
+
+async function shrink(texture, size) {
+  const image = await imageOf(texture).catch(() => null);
+  if (!image || Math.max(image.width, image.height) <= size) return;
+  const c = document.createElement('canvas');
+  c.width = Math.min(size, image.width);
+  c.height = Math.min(size, image.height);
+  c.getContext('2d').drawImage(image, 0, 0, c.width, c.height);
+  texture.image = c;
+  texture.needsUpdate = true;
 }
 
 // The model's textures finish decoding a moment after the model itself loads
