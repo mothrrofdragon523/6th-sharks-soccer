@@ -21,14 +21,16 @@ const PUSH_TIME = 0.12;    // ...worth about 1 m/s
 const BRAKE = 400;         // from a sprint to a stop in half a second
 const TURN_RATE = 9;       // radians per second he can swing his run round when slow...
 const TURN_LOSS = 0.55;    // ...and how much less at full sprint (wider turns)
-const FOOT = 11;               // the ball at his feet is drawn 0.55 m out from the middle of him...
-const STRIDE_REACH = 0.7;      // ...and up to 70% further out at full sprint
+export const FOOT = 7;        // the ball at his feet is 0.35 m out from the middle of him, touching his boot...
+const STRIDE_REACH = 0.9;      // ...and up to 90% further out at full sprint
 const SWEEP_SPEED = 240;       // fastest he rolls it round his feet (drag-backs, spins), 12 m/s
 // Dribbling: the ball runs a little ahead between touches, further the faster he goes
 const DRIBBLE_FRICTION = 0.45; // a dribbled ball keeps 45% of its speed each second
 const STOP_FRICTION = 0.005;   // ...and next to none once he goes to stop it
-const KNOCK = 30;              // extra pace on each touch when jogging...
-const KNOCK_SPRINT = 90;       // ...and up to this much more at full sprint
+const ON_BALL_R = 4;           // pass, shoot or trick with the ball more than 0.2 m past his standing foot, and he steps on to it first...
+const ON_BALL_WAIT = 0.4;      // ...taking at most this long
+const KNOCK = 15;              // extra pace on each touch when jogging...
+const KNOCK_SPRINT = 50;       // ...and up to this much more at full sprint
 const TIGHT_R = 70;            // an opponent this close in front (3.5 m, plus his speed) and he stops knocking it on
 const GATHER_SPEED = 220;     // how fast he can bring a ball beside or behind him back in front
 const GATHER_R = 60;           // ...if it's within 3 m of his feet
@@ -41,7 +43,7 @@ const FIRST_TOUCH = 40;               // a first touch knocks it this much faste
 const HOT_TOUCH = 0.15;               // ...plus this share of any pace over 250 the ball arrived with
 const INTERCEPT_R = 22;               // how near an opponent a firm pass (12–24 m/s) must pass to be cut out
 const FIRST_TOUCH_TIME = 0.3;        // ...and he lets it run that way this long before gathering it
-const NICK_LEAD = 22;         // the computer only nicks a person's ball when it's this far out ahead (a long sprint touch)
+const NICK_LEAD = 28;        // the computer only nicks a person's ball when it's this far out ahead (a long sprint touch)
 const KEEPER_SPEED = 140;
 // How long after starting each keeper move the ball leaves him (matches the animations)
 const KEEPER_RELEASE = { throw: 0.58, dropKick: 0.92, roll: 0.75 };
@@ -196,7 +198,7 @@ export class Match {
           spinUntil: 0, spin: null, spinBall: 0,
           diveUntil: 0, diveMoveUntil: 0, diveSpeed: 0, gkAct: null, release: null, faceBall: false,
           lockUntil: 0, leapAt: -10, dragUntil: 0, dragAngle: 0, ballPull: 0, ballAngle: 0, ballReach: 1,
-          slideAt: 0, slideUntil: 0, slideDir: 0, slideDone: false, tripAt: 0, tripUntil: 0, tripDir: 0, gotUp: true,
+          onBall: null, onBallUntil: 0, slideAt: 0, slideUntil: 0, slideDir: 0, slideDone: false, tripAt: 0, tripUntil: 0, tripDir: 0, gotUp: true,
         };
         this.players.push(p);
         this.teams.get(team).push(p);
@@ -255,7 +257,7 @@ export class Match {
       p.fx = Math.cos(p.angle); p.fy = 0;
       p.noTouchUntil = 0; p.stunUntil = 0; p.lungeUntil = 0; p.tackleReadyAt = 0;
       p.diveUntil = 0; p.release = null; p.gkAct = null; p.trickUntil = 0; p.lockUntil = 0; p.spinUntil = 0;
-      p.dragUntil = 0; p.ballPull = 0; p.slideUntil = 0; p.tripUntil = 0;
+      p.dragUntil = 0; p.ballPull = 0; p.slideUntil = 0; p.tripUntil = 0; p.onBall = null;
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
     }
@@ -383,8 +385,10 @@ export class Match {
   humanPass(c) {
     const me = c.controlled, m = c.move;
     const dir = m.mag > 0.2 ? { x: m.x, y: m.y } : { x: me.fx, y: me.fy };
-    const mate = this.pickPassTarget(me, dir);
-    if (mate) this.passTo(me, mate);
+    this.onBall(me, () => {
+      const mate = this.pickPassTarget(me, dir);
+      if (mate) this.passTo(me, mate);
+    });
   }
 
   // When the pilot gets questions (Gabe is playing), every shot pauses the game for a math question
@@ -392,11 +396,13 @@ export class Match {
   humanShoot(c) {
     const me = c.controlled, m = c.move;
     // Aim with the joystick; with no aim, go for the far post.
-    const aimY = m.mag > 0.2 ? m.y : (me.y < 0 ? 0.6 : -0.6);
-    if (!c.questions) { this.shoot(me, this.power(c.team), aimY); return; }
-    // The question's difficulty and his chance of scoring depend on how far out he's shooting from
-    this.pendingShot = { team: c.team, shooter: me, aimY, distance: this.shotDistance(me), fraction: this.shotFraction(me) };
-    this.state = 'question';
+    const aimY = m.mag > 0.2 ? m.y : (me.y < 0 ? 0.6 : -0.6), power = this.power(c.team);
+    this.onBall(me, () => {
+      if (!c.questions) { this.shoot(me, power, aimY); return; }
+      // The question's difficulty and his chance of scoring depend on how far out he's shooting from
+      this.pendingShot = { team: c.team, shooter: me, aimY, distance: this.shotDistance(me), fraction: this.shotFraction(me) };
+      this.state = 'question';
+    });
   }
 
   // style is one of SHOTS: 'header' scores; the others miss, less spectacularly the further off he was.
@@ -447,7 +453,7 @@ export class Match {
     const fx = Math.cos(p.angle), fy = Math.sin(p.angle);
     if (k < move.contactAt) {
       // Before the pop the ball is at his feet; then it follows an arc from there to the contact point.
-      const z0 = 4, reach0 = 11;
+      const z0 = 4, reach0 = FOOT;
       let z = 0, reach = reach0;
       if (k >= move.popAt) {
         const T = move.contactAt - move.popAt, u = k - move.popAt;
@@ -565,7 +571,7 @@ export class Match {
     const me = c.controlled, m = c.move;
     if (this.t < me.trickReadyAt) return;
     let dir = m.mag > 0.2 ? { x: m.x, y: m.y } : { x: me.fx, y: me.fy };
-    if (this.ball.owner === me) { this.spin(me, dir); return; }
+    if (this.ball.owner === me) { this.onBall(me, () => this.spin(me, dir)); return; }
     if (m.mag <= 0.2) dir = norm(this.ball.x - me.x, this.ball.y - me.y); // no direction given: head for the ball
     this.cut(me, dir);
   }
@@ -681,6 +687,7 @@ export class Match {
   // ---------- Ball actions (shared by human and computer players) ----------
   setOwner(p) {
     const b = this.ball;
+    if (b.owner && b.owner !== p) b.owner.onBall = null;
     b.owner = p;
     b.scripted = false;
     b.lastTouch = p;
@@ -762,6 +769,7 @@ export class Match {
     const b = this.ball, n = norm(dx, dy);
     b.owner = null;
     b.lastTouch = p;
+    p.onBall = null;
     if (p.role === 'gk') { // out of his hands (anyone else kicks it from where it is, at his feet)
       b.x = p.x + n.x * (PLAYER_R + BALL_R + 2);
       b.y = p.y + n.y * (PLAYER_R + BALL_R + 2);
@@ -1180,23 +1188,25 @@ export class Match {
       if (this.canShoot(p) && (dGoal < 320 || (dGoal < 480 && Math.random() < 0.2))) {
         const aimY = (Math.random() * 2 - 1) * 0.9;
         if (p.team === AWAY && dGoal < EAGLE_TRICK_RANGE && Math.random() < EAGLE_TRICK_SHOT) {
-          this.startTrickShot(p, pickWeighted(EAGLE_SHOTS), aimY, true);
+          const style = pickWeighted(EAGLE_SHOTS);
+          this.onBall(p, () => this.startTrickShot(p, style, aimY, true));
         } else {
-          this.shoot(p, 0.55 + Math.random() * 0.35, aimY);
+          const power = 0.55 + Math.random() * 0.35;
+          this.onBall(p, () => this.shoot(p, power, aimY));
         }
         return { vx: 0, vy: 0 };
       }
       // Someone in the way: sometimes spin round him, the same trick Gabe has
       const toGoal = norm(gx - p.x, -p.y);
       if (this.t >= p.trickReadyAt && this.blocker(p, toGoal, 90) && Math.random() < 0.35) {
-        this.spin(p, toGoal);
+        this.onBall(p, () => this.spin(p, toGoal));
         return { vx: 0, vy: 0 };
       }
       let pressure = Infinity, presser = null;
       for (const o of opponents) if (dist(p, o) < pressure && !this.down(o)) { pressure = dist(p, o); presser = o; }
       if (pressure < 80 && Math.random() < 0.6) {
         const m = this.openMate(p);
-        if (m) { this.passTo(p, m); return { vx: 0, vy: 0 }; }
+        if (m) { this.onBall(p, () => this.passTo(p, m)); return { vx: 0, vy: 0 }; }
       }
       // Tight marking and no pass on: roll it away from him
       if (pressure < 60 && this.t >= p.dragUntil + 0.5 && Math.random() < 0.3) this.dragAway(p, presser);
@@ -1399,14 +1409,15 @@ export class Match {
     // Letting go of the joystick (or pulling it back the other way), a person's player puts his
     // foot on it rather than let it run away
     const c = this.pilots.get(o.team), m = c && c.move;
-    const stopping = !!c && c.controlled === o && (m.mag < 0.15 || m.x * o.fx + m.y * o.fy < -0.3);
+    const stopping = !!o.onBall || (!!c && c.controlled === o && (m.mag < 0.15 || m.x * o.fx + m.y * o.fy < -0.3));
     const f = Math.pow(stopping ? STOP_FRICTION : DRIBBLE_FRICTION, dt);
     b.vx *= f;
     b.vy *= f;
     const fx = o.x + o.fx * B, fy = o.y + o.fy * B;
     const along = (b.x - o.x) * o.fx + (b.y - o.y) * o.fy;
     let gap = Math.hypot(fx - b.x, fy - b.y);
-    if (along < B && this.t >= o.firstTouchUntil) { // (after a first touch, he follows it before gathering)
+    // (After a first touch he follows it before gathering it; stepping on to it to play it, he leaves it be.)
+    if (along < B && this.t >= o.firstTouchUntil && !o.onBall) {
       if (gap > GATHER_R) { this.loseBall(o); return; } // behind him and out of reach
       // He's caught up with it (or it's beside him): bring it back in front and play it on
       const step = Math.min(gap, GATHER_SPEED * dt);
@@ -1430,6 +1441,12 @@ export class Match {
     const d = dist(o, b);
     o.ballAngle = Math.atan2(b.y - o.y, b.x - o.x);
     o.ballReach = d / FOOT; // the view draws it right where it is
+    if (o.onBall && (d <= FOOT + 1 || this.t >= o.onBallUntil)) { // he's on it: play the pass, shot or trick
+      const act = o.onBall;
+      o.onBall = null;
+      act();
+      return;
+    }
     if (d > B + LOSE_R) { this.loseBall(o); return; }
     if (d - B < 6) return; // tight at his feet: only a tackle gets it off him
     // Knocked on ahead, an opponent who gets there first takes it
@@ -1452,8 +1469,19 @@ export class Match {
     return 1 + STRIDE_REACH * u * u;
   }
 
+  // Pass, shoot or trick: with the ball still a stride out in front, he first steps on to it (it
+  // slows, he reaches it), then plays it. Right at his feet, he plays it straight away.
+  onBall(p, act) {
+    const b = this.ball;
+    if (b.owner === p && this.dribbling(p) && dist(p, b) > FOOT + ON_BALL_R) {
+      p.onBall = act;
+      p.onBallUntil = this.t + ON_BALL_WAIT;
+    } else act();
+  }
+
   loseBall(o) {
     const b = this.ball;
+    o.onBall = null;
     b.owner = null;
     b.lastTouch = o;
     b.passTarget = null;

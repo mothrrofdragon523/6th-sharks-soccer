@@ -1,6 +1,6 @@
 // Draws the match in 3D with a TV-style camera up in the stands along the near touchline.
 import * as THREE from 'three';
-import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, HOME, AWAY } from './sim.js';
+import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, HOME, AWAY, FOOT } from './sim.js';
 import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, PLAY_SPEED, PLAY_FOR, ANIM_SPEED } from './characters.js';
 
 const S = 0.05;                       // simulation units → metres
@@ -827,7 +827,7 @@ export class View {
       by = 1.1;
     } else if (b.owner && this.playerViews[0].model) {
       // Realistic players dribble with the ball close to their feet (sim.js works out which side)
-      const o = b.owner, a = o.ballAngle, r = 0.55 * o.ballReach;
+      const o = b.owner, a = o.ballAngle, r = FOOT * S * o.ballReach;
       bx = o.x * S + Math.cos(a) * r;
       bz = o.y * S + Math.sin(a) * r;
     }
