@@ -152,7 +152,7 @@ export class View {
   // Blend smoothly from the current animation into another
   fadeTo(v, key, fade, { once = false, start = 0, speed = 1 } = {}) {
     const next = v.actions[key], prev = v.currentAction;
-    if (v.current === key && !once) return;
+    if (!next || (v.current === key && !once)) return; // (a move that didn't load is skipped)
     if (prev && prev !== next) prev.fadeOut(fade);
     next.reset();
     next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
@@ -209,7 +209,7 @@ export class View {
           gait = p.sprinting ? 'sprint' : speed > 4 ? 'run' : 'jog';
         }
         this.fadeTo(v, gait, 0.2);
-        v.actions[gait].timeScale = THREE.MathUtils.clamp(speed / ANIM_SPEED[gait], 0.6, 1.9);
+        if (v.actions[gait]) v.actions[gait].timeScale = THREE.MathUtils.clamp(speed / ANIM_SPEED[gait], 0.6, 1.9);
       } else if (gk) {
         // With the ball far up the other end, he waves his defenders into place
         const far = Math.abs(m.ball.x - (p.team.dir === 1 ? F.left : F.right)) > 1000;

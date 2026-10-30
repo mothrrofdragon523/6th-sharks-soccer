@@ -86,18 +86,25 @@ function stripRootMotion(clip) {
 
 export async function loadCharacters() {
   const loader = new FBXLoader();
-  const names = Object.values(CLIPS);
+  // Each file once (two moves can share one), and a move whose file won't load is just left out:
+  // the players still get their 3D bodies (only the character itself has to load).
+  const files = [...new Set(Object.values(CLIPS))];
   const [base, ...anims] = await Promise.all([
     loader.loadAsync(encodeURI(DIR + 'character.fbx')),
-    ...names.map(n => loader.loadAsync(encodeURI(PACK + n + '.fbx'))),
+    ...files.map(n => loader.loadAsync(encodeURI(PACK + n + '.fbx')).catch(e => {
+      console.warn(`Could not load the move "${n}"; leaving it out.`, e);
+      return null;
+    })),
   ]);
   const clips = {};
-  Object.keys(CLIPS).forEach((key, i) => {
-    const clip = anims[i].animations[0];
+  for (const [key, file] of Object.entries(CLIPS)) {
+    const anim = anims[files.indexOf(file)];
+    if (!anim) continue;
+    const clip = anim.animations[0].clone();
     stripRootMotion(clip);
     clip.name = key;
     clips[key] = clip;
-  });
+  }
 
   const parts = {};
   base.traverse(o => { if (o.isMesh) parts[o.name] = o; });
