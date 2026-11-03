@@ -177,12 +177,15 @@ async function shrink(texture, size) {
   texture.needsUpdate = true;
 }
 
-// The model's textures finish decoding a moment after the model itself loads
+// The model's textures finish decoding a moment after the model itself loads. An image knows its
+// size before its pixels arrive, so wait for it to be complete too, or copying it gives black.
+const ready = im => im && im.width > 0 && (!(im instanceof HTMLImageElement) || im.complete);
+
 function imageOf(texture) {
   return new Promise((resolve, reject) => {
     const started = performance.now();
     const check = () => {
-      if (texture.image && texture.image.width > 0) resolve(texture.image);
+      if (ready(texture.image)) resolve(texture.image);
       else if (performance.now() - started > 20000) reject(new Error('texture never loaded'));
       else setTimeout(check, 50);
     };
