@@ -197,13 +197,15 @@ function imageOf(texture) {
 function repaint(image, paint, size = 512) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
-  const g = c.getContext('2d');
+  // willReadFrequently keeps the canvas off the graphics chip, where iPads can read it back blank.
+  const g = c.getContext('2d', { willReadFrequently: true });
   g.drawImage(image, 0, 0, size, size);
   const data = g.getImageData(0, 0, size, size);
   const d = data.data;
   for (let i = 0; i < d.length; i += 4) {
     const [r, gr, b] = paint(0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]);
     d[i] = r; d[i + 1] = gr; d[i + 2] = b;
+    d[i + 3] = 255; // always solid: a see-through pixel loses its colour and draws black
   }
   g.putImageData(data, 0, 0);
   const tex = new THREE.CanvasTexture(c);
