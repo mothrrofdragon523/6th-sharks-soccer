@@ -8,7 +8,10 @@ export const GOAL_DEPTH = 36;
 export const CROSSBAR = 48;
 export const PLAYER_R = 18;
 export const BALL_R = 9;
-const TOUCH_R = PLAYER_R + BALL_R + 4; // how close a player must be to control the ball
+const BODY_GAP = 22;           // two players' middles can't get closer than this (1.1 m, shoulder to shoulder)
+const TOUCH_R = 24;            // a player takes a loose ball this close to the middle of him (1.2 m: a stride and a boot)...
+const PASS_TOUCH = 6;          // ...and this much further for a pass played to him, stretching for it
+const KEEPER_TOUCH = 31;       // a keeper's hands reach further
 // Player speeds in units per second (20 units = 1 m): run 7.5 m/s, sprint 10 m/s
 const RUN_SPEED = 150;
 const SPRINT_SPEED = 200;
@@ -21,29 +24,27 @@ const PUSH_TIME = 0.12;    // ...worth about 1 m/s
 const BRAKE = 400;         // from a sprint to a stop in half a second
 const TURN_RATE = 9;       // radians per second he can swing his run round when slow...
 const TURN_LOSS = 0.55;    // ...and how much less at full sprint (wider turns)
-export const FOOT = 7;        // the ball at his feet is 0.35 m out from the middle of him, touching his boot...
-const STRIDE_REACH = 0.9;      // ...and up to 90% further out at full sprint
-const SWEEP_SPEED = 240;       // fastest he rolls it round his feet (drag-backs, spins), 12 m/s
-// Dribbling: the ball runs a little ahead between touches, further the faster he goes
-const DRIBBLE_FRICTION = 0.45; // a dribbled ball keeps 45% of its speed each second
-const STOP_FRICTION = 0.005;   // ...and next to none once he goes to stop it
+// The ball at his feet: how far it sits out in front of the middle of him. These come from measuring
+// how far his boots reach in the running animations, plus the ball's own size, so it stays just
+// beyond his leading toe. Smaller: the feet run over it. Bigger: it looks like it's running away.
+export const FOOT = 7;         // standing still (0.35 m)
+const JOG_REACH = 10.2;        // jogging (0.51 m)
+const SPRINT_REACH = 14.2;     // flat-out sprint (0.71 m), and in between for a run
+const JOG_SPEED = 30;          // he's in his jogging stride from this speed (1.5 m/s)
+const CARRY_EASE = 20;         // how snappily the ball settles where it should be (higher = tighter)
+const CARRY_SPEED = 240;       // the fastest it moves around him (12 m/s), so it never jumps
+const DRAG_SIDE = 1.4;         // pulling it away from a defender, it goes up to about 80 degrees round to his side
 const ON_BALL_R = 4;           // pass, shoot or trick with the ball more than 0.2 m past his standing foot, and he steps on to it first...
 const ON_BALL_WAIT = 0.4;      // ...taking at most this long
-const KNOCK = 15;              // extra pace on each touch when jogging...
-const KNOCK_SPRINT = 50;       // ...and up to this much more at full sprint
-const TIGHT_R = 70;            // an opponent this close in front (3.5 m, plus his speed) and he stops knocking it on
-const GATHER_SPEED = 220;     // how fast he can bring a ball beside or behind him back in front
-const GATHER_R = 60;           // ...if it's within 3 m of his feet
-const LOSE_R = 90;             // knocked more than 4.5 m ahead of his feet, it's anybody's
 // Passing and receiving
 const ROLL_KEEP = 0.6;                // a rolling ball keeps 60% of its speed each second
 const ROLL_LOSS = -Math.log(ROLL_KEEP); // ...the same, as a rate
 const PASS_LEAD = 0.45;              // a pass leads a runner by up to this many seconds of his running
-const FIRST_TOUCH = 40;               // a first touch knocks it this much faster than he's running...
-const HOT_TOUCH = 0.15;               // ...plus this share of any pace over 250 the ball arrived with
+const FIRST_TOUCH = 6;                // a first touch sets it this much further out than usual (0.3 m)...
+const HOT_TOUCH = 0.05;               // ...plus this share of any pace over 250 the ball arrived with...
+const FIRST_TOUCH_MAX = 12;           // ...but never more than this (0.6 m)
 const INTERCEPT_R = 22;               // how near an opponent a firm pass (12–24 m/s) must pass to be cut out
 const FIRST_TOUCH_TIME = 0.3;        // ...and he lets it run that way this long before gathering it
-const NICK_LEAD = 28;        // the computer only nicks a person's ball when it's this far out ahead (a long sprint touch)
 const KEEPER_SPEED = 140;
 // How long after starting each keeper move the ball leaves him (matches the animations)
 const KEEPER_RELEASE = { throw: 0.58, dropKick: 0.92, roll: 0.75 };
@@ -59,15 +60,29 @@ const SPIN_SPEED = 150;     // about 6 m round the defender over the whole spin
 // ball) and jabs a foot at it now and then. The player on the ball drags it away from the poke.
 const JOCKEY_R = 90;               // a defender this close (4.5 m) starts jockeying
 const JOCKEY_GAP = 34;             // ...about 1.7 m off, between the ball and his goal
-const POKE_R = PLAYER_R * 2 + 18;  // close enough to get a foot to the ball
+// Winning the ball with a poke. All of these are measured to the BALL, not to the man on it. His leg
+// reaches 0.9 m in the animation and the ball is 0.14 m wide, so that's about 1.25 m with his lean.
+const POKE_REACH = 25;             // his foot gets to the ball only this close to the middle of him (1.25 m)
+const POKE_RANGE = 60;             // a person's tackle button steps in for it from up to this far off the ball (3 m)
+const AI_POKE_RANGE = 40;          // the computer goes for it from this far (2 m)
+const POKE_TIME = 0.32;            // how long the step in lasts: no contact by then and he's missed it
+const POKE_FOOT_AT = 0.12;         // his leg takes this long to get out there (from the animation)
+const POKE_STEP = 300;             // how fast he steps in (15 m/s, for a moment)
+const POKE_GAP = 10;               // a person stepping in can get this close to the man (0.5 m, shoulder in) to reach round him for it
 const DRAG_TIME = 0.7;
 // Sliding tackles. The paths are measured from the animations (metres the hips travel every 0.1 s
 // of the clip), so a player moves across the grass in step with his legs.
 const SLIDE_PATH = [0, 0.58, 1.03, 1.53, 2.07, 2.51, 2.82, 3.09, 3.33, 3.51, 3.64, 3.76, 3.85, 3.97, 4.1, 4.21, 4.26, 4.31];
 const SLIDE_PLAY = 1.25;      // played this much faster than it was recorded
-const SLIDE_R = 150;          // tackle pressed within 7.5 m of the ball (and too far to poke at it): he slides
+const SLIDE_R = 100;          // tackle pressed within 5 m of the ball (and too far to poke at it): he slides (he covers about 4.7 m)
+const SLIDE_LEG = 19;         // his leading leg is 0.95 m long along the grass (from the animation)...
+const SLIDE_LEG_AT = 0.2;     // ...and out in front this far into the clip
+const SLIDE_BALL = 14;        // the ball has to be this close to that leg for him to play it (0.7 m, his legs are apart)
+const SLIDE_STEER = 0.9;      // he can bend his slide toward the ball this much (radians a second)
+const SLIDE_MAN = 12;         // and the man this close to it (0.6 m) for him to go over
 const SLIDE_WIN = { person: 0.7, computer: 0.35, even: 0.5 }; // a person sliding at the computer / the computer at a person
-const AI_SLIDE_RATE = 0.35;   // chance a second that a computer defender in range goes to ground (half that at a person)
+const AI_SLIDE_RATE = 0.9;    // chance a second that a computer defender in range goes to ground (half that at a person)
+const AI_SLIDE_LOOK = 0.45;   // ...and only if the ball will still be within reach this many seconds from now
 // ...and the player who's slid into falls over (cut short once he's down), then gets up
 const TRIP_PATH = [0, 0.46, 0.89, 1.27, 1.62, 1.96, 2.33, 2.56, 2.67, 2.85, 3.07];
 const TRIP_PLAY = 1.4;
@@ -195,7 +210,7 @@ export class Match {
           holdUntil: 0, lungeUntil: 0, lx: 0, ly: 0, kickAt: -10,
           stamina: 1, exhausted: false, sprinting: false, pushUntil: 0, firstTouchUntil: 0, kickType: 'pass',
           trickUntil: 0, trickReadyAt: 0, trickSide: 'L', tvx: 0, tvy: 0, tface: 0,
-          spinUntil: 0, spin: null, spinBall: 0,
+          spinUntil: 0, spin: null, spinBall: 0, pokeAt: 0, pokeUntil: 0, touchDir: 0, touchLead: 0,
           diveUntil: 0, diveMoveUntil: 0, diveSpeed: 0, gkAct: null, release: null, faceBall: false,
           lockUntil: 0, leapAt: -10, dragUntil: 0, dragAngle: 0, ballPull: 0, ballAngle: 0, ballReach: 1,
           onBall: null, onBallUntil: 0, slideAt: 0, slideUntil: 0, slideDir: 0, slideDone: false, tripAt: 0, tripUntil: 0, tripDir: 0, gotUp: true,
@@ -257,7 +272,7 @@ export class Match {
       p.fx = Math.cos(p.angle); p.fy = 0;
       p.noTouchUntil = 0; p.stunUntil = 0; p.lungeUntil = 0; p.tackleReadyAt = 0;
       p.diveUntil = 0; p.release = null; p.gkAct = null; p.trickUntil = 0; p.lockUntil = 0; p.spinUntil = 0;
-      p.dragUntil = 0; p.ballPull = 0; p.slideUntil = 0; p.tripUntil = 0; p.onBall = null;
+      p.dragUntil = 0; p.ballPull = 0; p.slideUntil = 0; p.tripUntil = 0; p.onBall = null; p.pokeUntil = 0; p.firstTouchUntil = 0;
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
     }
@@ -424,7 +439,7 @@ export class Match {
     const move = SHOTS[style];
     const gx = oppGoalX(p.team);
     const toGoal = Math.atan2(-p.y, gx - p.x);
-    this.trickShot = { p, style, move, aimY, real, t0: this.t, face: move.backToGoal ? toGoal + Math.PI : toGoal, struck: false, striking: false };
+    this.trickShot = { p, style, move, aimY, real, t0: this.t, face: move.backToGoal ? toGoal + Math.PI : toGoal, struck: false, striking: false, reach0: dist(p, this.ball) };
     p.lockUntil = this.t + move.contactAt + (move.downFor || 0.35);
     if (style === 'header') p.leapAt = this.t + move.contactAt; // the view lifts him off the ground
     p.kickAt = this.t;
@@ -453,7 +468,7 @@ export class Match {
     const fx = Math.cos(p.angle), fy = Math.sin(p.angle);
     if (k < move.contactAt) {
       // Before the pop the ball is at his feet; then it follows an arc from there to the contact point.
-      const z0 = 4, reach0 = FOOT;
+      const z0 = 4, reach0 = s.reach0;
       let z = 0, reach = reach0;
       if (k >= move.popAt) {
         const T = move.contactAt - move.popAt, u = k - move.popAt;
@@ -646,8 +661,8 @@ export class Match {
     if (this.t < me.tackleReadyAt) return;
     me.tackleReadyAt = this.t + 0.55;
     const o = this.ball.owner;
-    if (o && o.team !== me.team && o.role !== 'gk' && dist(me, o) < POKE_R + 6) {
-      this.poke(me, o);
+    if (o && o.team !== me.team && o.role !== 'gk' && dist(me, this.ball) < POKE_RANGE) {
+      this.startPoke(me);
       return;
     }
     // A few metres off the ball (theirs, or loose): go to ground and slide in for it
@@ -661,6 +676,32 @@ export class Match {
     const n = norm(this.ball.x - me.x, this.ball.y - me.y);
     me.lx = n.x; me.ly = n.y;
     me.lungeUntil = this.t + 0.22;
+  }
+
+  // Going for the ball on his feet: he turns to it and steps in with a foot out. It's only a tackle
+  // if that foot actually gets there (pokeContacts).
+  startPoke(p) {
+    const b = this.ball, n = norm(b.x - p.x, b.y - p.y);
+    p.angle = Math.atan2(n.y, n.x); p.fx = n.x; p.fy = n.y;
+    p.lx = n.x; p.ly = n.y;
+    p.kickAt = this.t;
+    p.kickType = 'poke';
+    p.pokeAt = this.t;
+    p.pokeUntil = p.lungeUntil = this.t + POKE_TIME;
+  }
+
+  // The moment a stepping-in foot reaches the ball
+  pokeContacts() {
+    const b = this.ball, o = b.owner;
+    for (const p of this.players) {
+      if (this.t >= p.pokeUntil || this.t < p.pokeAt + POKE_FOOT_AT) continue;
+      if (!o || o.team === p.team || o.role === 'gk') { p.pokeUntil = 0; continue; }
+      if (dist(p, b) > POKE_REACH) continue;
+      p.pokeUntil = 0;
+      p.lungeUntil = this.t;
+      this.poke(p, o);
+      return;
+    }
   }
 
   switchPlayer(c) {
@@ -696,6 +737,7 @@ export class Match {
       b.vx = p.vx; b.vy = p.vy;
       p.ballAngle = Math.atan2(b.y - p.y, b.x - p.x);
       p.ballReach = dist(p, b) / FOOT;
+      p.firstTouchUntil = 0;
     }
     const c = this.pilots.get(p.team);
     if (c && p.role !== 'gk') c.controlled = p;
@@ -819,9 +861,7 @@ export class Match {
   steal(p) {
     const o = this.ball.owner;
     o.noTouchUntil = this.t + 0.6;
-    o.stunUntil = this.t + 0.3;
-    o.kickAt = this.t; // he stumbles as it's taken off him
-    o.kickType = 'stumble';
+    o.stunUntil = this.t + 0.3; // he checks his stride for a moment, but stays on his feet
     this.setOwner(p); // (he gathers it in from where it was, so it doesn't jump)
   }
 
@@ -831,6 +871,8 @@ export class Match {
     b.x = p.x + p.fx * FOOT;
     b.y = p.y + p.fy * FOOT;
     b.vx = p.vx; b.vy = p.vy;
+    p.ballAngle = p.angle;
+    p.ballReach = 1;
   }
 
   // A defender jabs a foot at the ball: he wins it cleanly, knocks it loose for a scramble,
@@ -850,8 +892,9 @@ export class Match {
 
   // Going to ground for the ball, aimed where it's heading (or where whoever has it is running)
   slide(p) {
-    const b = this.ball, o = b.owner, lead = clamp(dist(p, b) / 250, 0.1, 0.45); // (about how long till he's there)
-    const tx = b.x + (o ? o.vx : b.vx) * lead, ty = b.y + (o ? o.vy : b.vy) * lead;
+    const b = this.ball, o = b.owner, vx = o ? o.vx : b.vx, vy = o ? o.vy : b.vy, to = norm(p.x - b.x, p.y - b.y);
+    const lead = clamp(dist(p, b) / (120 + Math.max(0, vx * to.x + vy * to.y)), 0.1, 0.7); // (about how long till they meet)
+    const tx = b.x + vx * lead, ty = b.y + vy * lead;
     const straight = Math.atan2(b.y - p.y, b.x - p.x);
     p.slideDir = rotateTo(straight, Math.atan2(ty - p.y, tx - p.x), 0.6); // never far off the ball itself
     p.angle = p.slideDir; p.fx = Math.cos(p.angle); p.fy = Math.sin(p.angle);
@@ -865,23 +908,34 @@ export class Match {
     p.kickType = 'slide';
   }
 
-  // Sliding along the grass, his leading foot reaches the ball (or he gets to the man on it) before
-  // he's stopped: he wins it and knocks it away, and the man goes over; or he's beaten and left on
-  // the floor.
-  slideContacts() {
+  // Sliding along the grass, once his leading leg is out: if it gets the ball (or takes the man's
+  // legs) he wins it, and the man goes over only if the leg really got to him. If it reaches neither
+  // he's beaten and left on the floor.
+  slideContacts(dt) {
     const b = this.ball;
     for (const p of this.players) {
       if (this.t >= p.slideUntil || p.slideDone) continue;
       const k = (this.t - p.slideAt) * SLIDE_PLAY; // seconds into the clip
       if (k > 1) continue;
-      const foot = { x: p.x + Math.cos(p.slideDir) * 22, y: p.y + Math.sin(p.slideDir) * 22 };
+      p.slideDir = rotateTo(p.slideDir, Math.atan2(b.y - p.y, b.x - p.x), SLIDE_STEER * dt);
+      if (k < SLIDE_LEG_AT) continue;
+      const toLeg = q => {
+        const dx = Math.cos(p.slideDir), dy = Math.sin(p.slideDir);
+        const along = clamp((q.x - p.x) * dx + (q.y - p.y) * dy, 0, SLIDE_LEG);
+        return Math.hypot(q.x - p.x - dx * along, q.y - p.y - dy * along);
+      };
       const o = b.owner;
-      if (o && o.team !== p.team && o.role !== 'gk' && (dist(foot, b) < 24 || dist(foot, o) < 26 || dist(p, o) < 30)) {
+      if (o && o.team !== p.team && o.role !== 'gk') {
+        const hitsMan = toLeg(o) < SLIDE_MAN;
+        if (toLeg(b) >= SLIDE_BALL && !hitsMan) continue;
         p.slideDone = true;
         const byPerson = this.isControlled(p), onPerson = this.isControlled(o);
         const win = byPerson && onPerson ? SLIDE_WIN.even : byPerson ? SLIDE_WIN.person : onPerson ? SLIDE_WIN.computer : 0.5;
-        if (Math.random() < win) { this.clearBall(p); this.trip(o); }
-      } else if (!o && !b.scripted && b.z < 15 && dist(foot, b) < 24) {
+        if (Math.random() < win) {
+          this.clearBall(p);
+          if (hitsMan) this.trip(o); else { o.noTouchUntil = this.t + 0.4; o.stunUntil = this.t + 0.3; }
+        }
+      } else if (!o && !b.scripted && b.z < 15 && toLeg(b) < SLIDE_BALL) {
         p.slideDone = true;
         this.clearBall(p);
       }
@@ -891,9 +945,8 @@ export class Match {
   // His slide knocks the ball on a few metres the way he's going
   clearBall(p) {
     const b = this.ball, a = p.slideDir + (Math.random() - 0.5) * 0.8, speed = 130 + Math.random() * 70;
+    if (b.owner) b.owner.onBall = null;
     b.owner = null;
-    b.x = p.x + Math.cos(p.slideDir) * 24;
-    b.y = p.y + Math.sin(p.slideDir) * 24;
     b.vx = Math.cos(a) * speed;
     b.vy = Math.sin(a) * speed;
     b.vz = 0;
@@ -935,6 +988,7 @@ export class Match {
     const b = this.ball, away = norm(b.x - p.x, b.y - p.y);
     const a = Math.atan2(away.y, away.x) + (Math.random() - 0.5) * 1.2;
     const speed = 40 + Math.random() * 30; // rolls about 4–7 m
+    o.onBall = null;
     b.owner = null;
     b.vx = Math.cos(a) * speed;
     b.vy = Math.sin(a) * speed;
@@ -965,7 +1019,7 @@ export class Match {
     const dot = b.vx * n.x + b.vy * n.y;
     if (dot < 0) { b.vx -= 2 * dot * n.x; b.vy -= 2 * dot * n.y; }
     b.vx *= 0.45; b.vy *= 0.45; b.vz = Math.abs(b.vz) * 0.5 + 40;
-    b.x = p.x + n.x * TOUCH_R; b.y = p.y + n.y * TOUCH_R;
+    b.x = p.x + n.x * KEEPER_TOUCH; b.y = p.y + n.y * KEEPER_TOUCH;
     b.lastTouch = p;
     p.noTouchUntil = this.t + 0.3;
   }
@@ -1212,9 +1266,8 @@ export class Match {
       if (pressure < 60 && this.t >= p.dragUntil + 0.5 && Math.random() < 0.3) this.dragAway(p, presser);
     }
 
-    // Dribble at goal, steering around anyone in the way (and after the ball if it's run on ahead).
-    const b = this.ball;
-    let d = dist(p, b) > FOOT * this.stride(p) + 12 ? norm(b.x - p.x, b.y - p.y) : norm(gx - p.x, -p.y);
+    // Dribble at goal, steering around anyone in the way.
+    let d = norm(gx - p.x, -p.y);
     for (const o of opponents) {
       if (o.role === 'gk') continue;
       const ox = o.x - p.x, oy = o.y - p.y, od = Math.hypot(ox, oy);
@@ -1233,15 +1286,16 @@ export class Match {
     for (const p of this.players) {
       if (this.isControlled(p) || p.team === o.team || p.role === 'gk' || this.down(p)) continue;
       // The one closing him down, a few metres off: now and then he slides in
-      const d = dist(p, o);
-      if (d >= POKE_R && d < SLIDE_R * 0.8 && this.t >= p.tackleReadyAt && this.nearestOutfield(p.team, o) === p
+      const d = dist(p, this.ball);
+      const later = { x: this.ball.x + o.vx * AI_SLIDE_LOOK, y: this.ball.y + o.vy * AI_SLIDE_LOOK };
+      if (d >= AI_POKE_RANGE && d < SLIDE_R * 0.8 && dist(p, later) < SLIDE_R * 0.7 && this.t >= p.tackleReadyAt && this.nearestOutfield(p.team, o) === p
         && Math.random() < AI_SLIDE_RATE * dt * (this.isControlled(o) ? 0.5 : 1)) {
         this.slide(p);
         return;
       }
-      if (dist(p, o) < POKE_R && this.t >= p.tackleReadyAt) {
+      if (d < AI_POKE_RANGE && this.t >= p.tackleReadyAt) {
         p.tackleReadyAt = this.t + 0.9 + Math.random() * 0.8;
-        this.poke(p, o);
+        this.startPoke(p);
         return;
       }
     }
@@ -1301,6 +1355,11 @@ export class Match {
       else if (this.t < p.lockUntil) d = { vx: 0, vy: 0 }; // mid trick shot (or picking himself up after one)
       else if (spinning) d = spinning;
       else if (this.t < p.trickUntil) d = { vx: p.tvx, vy: p.tvy };
+      else if (this.t < p.pokeUntil) {
+        // Stepping in at the ball, and easing up as his foot gets there
+        const n = norm(this.ball.x - p.x, this.ball.y - p.y), s = POKE_STEP * clamp((dist(p, this.ball) - POKE_REACH * 0.6) / 15, 0, 1);
+        d = { vx: n.x * s, vy: n.y * s };
+      }
       else if (this.t < p.lungeUntil) d = { vx: p.lx * 300, vy: p.ly * 300 };
       else if (this.t < p.dragUntil && !steering && this.ball.owner === p) {
         // Stepping back with the ball, away from the defender
@@ -1336,6 +1395,7 @@ export class Match {
       else if (spinning) { p.angle = spinning.angle; p.spinBall = spinning.ball; target = p.angle; }
       else if (this.t < p.lockUntil) target = null;
       else if (this.t < p.trickUntil) target = p.tface;
+      else if (this.t < p.pokeUntil) target = facePoint(this.ball); // his foot goes where he's looking
       else if (this.t < p.dragUntil && !steering && this.ball.owner === p) target = p.dragAngle + Math.PI; // facing the defender
       else if (steering && move.mag > 0.15) {
         // On the move he faces where he's actually going (planting to turn back, he still faces forward)
@@ -1361,7 +1421,8 @@ export class Match {
         const a = this.players[i], c = this.players[j];
         const slipping = q => this.t < q.trickUntil || this.t < q.spinUntil || this.down(q);
         if (a.team !== c.team && (slipping(a) || slipping(c))) continue; // slipping past
-        const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy), min = PLAYER_R * 2;
+        const reaching = q => this.t < q.pokeUntil && this.isControlled(q);
+        const dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy), min = a.team !== c.team && (reaching(a) || reaching(c)) ? POKE_GAP : BODY_GAP;
         if (d < min && d > 0.01) {
           const push = (min - d) / 2, nx = dx / d, ny = dy / d;
           a.x -= nx * push; a.y -= ny * push;
@@ -1393,121 +1454,93 @@ export class Match {
     p.vy = Math.sin(a) * s;
   }
 
-  // An outfield player just running with the ball (not mid-trick, spin or drag-back) dribbles it
+  // An outfield player just running with the ball (not mid-trick, spin or drag-back)
   dribbling(o) {
     return o.role !== 'gk' && this.t >= o.spinUntil && this.t >= o.trickUntil && this.t >= o.dragUntil
       && this.t >= o.lockUntil && o.ballPull < 0.01 && !(this.trickShot && this.trickShot.p === o);
   }
 
-  // The ball rolls on ahead of him between touches, and when he catches up he plays it on again:
-  // tiny touches jogging, longer ones sprinting. Turn away from it and it can get away from him.
-  dribble(o, dt) {
-    const b = this.ball, B = FOOT * this.stride(o); // B: right at his feet
-    b.z = 0; b.vz = 0;
-    b.x += b.vx * dt;
-    b.y += b.vy * dt;
-    // Letting go of the joystick (or pulling it back the other way), a person's player puts his
-    // foot on it rather than let it run away
-    const c = this.pilots.get(o.team), m = c && c.move;
-    const stopping = !!o.onBall || (!!c && c.controlled === o && (m.mag < 0.15 || m.x * o.fx + m.y * o.fy < -0.3));
-    const f = Math.pow(stopping ? STOP_FRICTION : DRIBBLE_FRICTION, dt);
-    b.vx *= f;
-    b.vy *= f;
-    const fx = o.x + o.fx * B, fy = o.y + o.fy * B;
-    const along = (b.x - o.x) * o.fx + (b.y - o.y) * o.fy;
-    let gap = Math.hypot(fx - b.x, fy - b.y);
-    // (After a first touch he follows it before gathering it; stepping on to it to play it, he leaves it be.)
-    if (along < B && this.t >= o.firstTouchUntil && !o.onBall) {
-      if (gap > GATHER_R) { this.loseBall(o); return; } // behind him and out of reach
-      // He's caught up with it (or it's beside him): bring it back in front and play it on
-      const step = Math.min(gap, GATHER_SPEED * dt);
-      if (gap > 0.01) { b.x += (fx - b.x) / gap * step; b.y += (fy - b.y) / gap * step; }
-      gap -= step;
-      const s = Math.hypot(o.vx, o.vy);
-      if (gap < 4 && s > 40) {
-        // With an opponent right in front of him he keeps it tight instead of knocking it on
-        // (further ahead the faster he's going: a second's running)
-        const tight = this.players.some(q => q.team !== o.team && dist(q, o) < TIGHT_R + s
-          && (q.x - o.x) * o.fx + (q.y - o.y) * o.fy > 0);
-        const u = clamp((s - 80) / (SPRINT_SPEED - 80), 0, 1);
-        const pace = tight ? s : s + KNOCK + KNOCK_SPRINT * u * u;
-        b.vx = o.fx * pace;
-        b.vy = o.fy * pace;
-      } else {
-        b.vx = o.vx;
-        b.vy = o.vy;
-      }
+  // How far out the ball should be at this speed (see FOOT): just beyond his leading toe
+  reach(o) {
+    const s = Math.hypot(o.vx, o.vy);
+    if (s < JOG_SPEED) return FOOT + (JOG_REACH - FOOT) * s / JOG_SPEED;
+    return JOG_REACH + (SPRINT_REACH - JOG_REACH) * Math.min(1, (s - JOG_SPEED) / (SPRINT_SPEED - JOG_SPEED));
+  }
+
+  // The ball at an outfield player's feet. It's kept as a direction and a distance from the middle
+  // of him (ballAngle, ballReach, which the view draws it by), so it comes with him however he moves
+  // and whatever the frame rate, swings round him rather than through him when he turns, and the
+  // distance never drops inside his feet. Each frame both ease toward where they should be.
+  carry(o, dt) {
+    const b = this.ball;
+    let a = o.angle, r = this.reach(o);
+    if (this.t < o.spinUntil) a = o.spinBall; // mid-spin it stays on his path
+    else if (this.t < o.firstTouchUntil) { a = o.touchDir; r += o.touchLead; } // his first touch sets it off
+    if (o.ballPull > 0.01) { // pulled away from a defender, it goes round to his far side
+      const off = Math.atan2(Math.sin(o.dragAngle - a), Math.cos(o.dragAngle - a));
+      a += clamp(off, -DRAG_SIDE, DRAG_SIDE) * o.ballPull;
     }
-    const d = dist(o, b);
-    o.ballAngle = Math.atan2(b.y - o.y, b.x - o.x);
-    o.ballReach = d / FOOT; // the view draws it right where it is
-    if (o.onBall && (d <= FOOT + 1 || this.t >= o.onBallUntil)) { // he's on it: play the pass, shot or trick
+    if (o.onBall) r = Math.min(r, FOOT + ON_BALL_R); // stepping on to it to play it
+
+    const r0 = o.ballReach * FOOT, ease = 1 - Math.exp(-dt * CARRY_EASE), most = CARRY_SPEED * dt;
+    const da = Math.atan2(Math.sin(a - o.ballAngle), Math.cos(a - o.ballAngle));
+    const swing = most / Math.max(r0, FOOT);
+    o.ballAngle += clamp(da * ease, -swing, swing);
+    const reach = r0 + clamp((r - r0) * ease, -most, most);
+    o.ballReach = reach / FOOT;
+    b.x = o.x + Math.cos(o.ballAngle) * reach;
+    b.y = o.y + Math.sin(o.ballAngle) * reach;
+    b.z = 0; b.vz = 0;
+    b.vx = o.vx; b.vy = o.vy;
+    // Up against the boards or the goal line it stays on the pitch
+    const cx = clamp(b.x, F.left + BALL_R, F.right - BALL_R), cy = clamp(b.y, F.top + BALL_R, F.bottom - BALL_R);
+    if (cx !== b.x || cy !== b.y) {
+      b.x = cx; b.y = cy;
+      o.ballAngle = Math.atan2(cy - o.y, cx - o.x);
+      o.ballReach = dist(o, b) / FOOT;
+    }
+
+    if (o.onBall && (reach <= FOOT + ON_BALL_R + 1 || this.t >= o.onBallUntil)) { // he's on it: play the pass, shot or trick
       const act = o.onBall;
       o.onBall = null;
       act();
       return;
     }
-    if (d > B + LOSE_R) { this.loseBall(o); return; }
-    if (d - B < 6) return; // tight at his feet: only a tackle gets it off him
-    // Knocked on ahead, an opponent who gets there first takes it
+    if (reach - this.reach(o) < 6) return; // tight at his feet: only a tackle gets it off him
+    // Set out ahead by a first touch, an opponent who gets there first takes it (the computer
+    // never does this to a person: only a real tackle takes it off them)
     for (const q of this.players) {
       if (q.team === o.team || this.t < q.noTouchUntil) continue;
       const qd = dist(q, b);
-      if (qd > TOUCH_R || qd > d) continue;
-      if (this.isControlled(o) && !this.isControlled(q) && d - B < NICK_LEAD) continue; // a person's close dribble is safe from the computer
+      if (qd > TOUCH_R || qd > reach) continue;
+      if (this.isControlled(o) && !this.isControlled(q)) continue;
       o.noTouchUntil = this.t + 0.4;
       this.receive(q);
       return;
     }
   }
 
-  // A player's ball sits FOOT units out at his feet when he's standing, and further out the faster
-  // he runs, so it stays ahead of his leading foot as his stride lengthens. (ballReach, which the
-  // view draws it by, is its distance out in FOOTs.)
-  stride(o) {
-    const u = Math.min(1, Math.hypot(o.vx, o.vy) / SPRINT_SPEED);
-    return 1 + STRIDE_REACH * u * u;
-  }
-
   // Pass, shoot or trick: with the ball still a stride out in front, he first steps on to it (it
   // slows, he reaches it), then plays it. Right at his feet, he plays it straight away.
   onBall(p, act) {
     const b = this.ball;
-    if (b.owner === p && this.dribbling(p) && dist(p, b) > FOOT + ON_BALL_R) {
+    if (b.owner === p && this.dribbling(p) && dist(p, b) > FOOT + ON_BALL_R + 1) {
       p.onBall = act;
       p.onBallUntil = this.t + ON_BALL_WAIT;
     } else act();
   }
 
-  loseBall(o) {
-    const b = this.ball;
-    o.onBall = null;
-    b.owner = null;
-    b.lastTouch = o;
-    b.passTarget = null;
-  }
-
   updateBall(dt) {
     const b = this.ball, prevX = b.x;
-    if (b.owner && this.dribbling(b.owner)) {
-      this.dribble(b.owner, dt);
+    if (b.owner && b.owner.role !== 'gk') {
+      this.carry(b.owner, dt);
     } else if (b.owner) {
-      // In front of him; mid-spin it stays on his path; pulled back, it's tucked in on the far side from the defender
+      // A keeper's is in his hands (the view draws it there)
       const o = b.owner;
-      let a = o.angle;
-      if (this.t < o.spinUntil) a = o.spinBall;
-      else if (o.ballPull > 0.01) a += Math.atan2(Math.sin(o.dragAngle - a), Math.cos(o.dragAngle - a)) * o.ballPull;
-      const off = FOOT * (1 - 0.35 * o.ballPull) * this.stride(o);
-      // Carried along with him, it slides into that spot over a few frames rather than jumping there
-      const k = o.role === 'gk' ? 1 : Math.min(1, dt * 18); // (a keeper's is in his hands, drawn by the view)
-      const rx = b.x - o.x, ry = b.y - o.y;
-      let sx = (Math.cos(a) * off - rx) * k, sy = (Math.sin(a) * off - ry) * k;
-      const sl = Math.hypot(sx, sy), most = o.role === 'gk' ? Infinity : SWEEP_SPEED * dt;
-      if (sl > most) { sx *= most / sl; sy *= most / sl; }
-      b.x = o.x + rx + sx;
-      b.y = o.y + ry + sy;
-      o.ballAngle = Math.atan2(b.y - o.y, b.x - o.x); // the view draws the ball here too
-      o.ballReach = dist(o, b) / FOOT;
+      b.x = o.x + o.fx * FOOT;
+      b.y = o.y + o.fy * FOOT;
+      o.ballAngle = o.angle;
+      o.ballReach = 1;
       b.z = 0; b.vz = 0;
       b.vx = o.vx;
       b.vy = o.vy;
@@ -1572,7 +1605,7 @@ export class Match {
       const isGk = p.role === 'gk';
       if (b.z > (isGk ? 60 : 22)) continue; // too high to reach
       const d = dist(p, b);
-      let reach = !isGk ? TOUCH_R : this.t < p.diveMoveUntil + 0.3 ? TOUCH_R + 22 : TOUCH_R + 8; // arms out in a dive
+      let reach = !isGk ? (b.passTarget === p ? TOUCH_R + PASS_TOUCH : TOUCH_R) : this.t < p.diveMoveUntil + 0.3 ? KEEPER_TOUCH + 22 : KEEPER_TOUCH + 8; // arms out in a dive
       // A firm pass rolling past an opponent's feet is hard to cut out unless it's nearly at him
       const opponent = b.lastTouch && b.lastTouch.team !== p.team;
       if (!isGk && opponent && speed > 250 && speed <= 480) reach = INTERCEPT_R;
@@ -1599,20 +1632,10 @@ export class Match {
     const hot = Math.max(0, Math.hypot(b.vx, b.vy) - 250) * HOT_TOUCH;
     this.setOwner(p);
     const person = !!c && c.controlled === p;
-    let dir;
-    if (person && c.move.mag > 0.2) dir = norm(c.move.x, c.move.y);
-    else if (person) { b.vx = p.vx * 0.5; b.vy = p.vy * 0.5; return; }
-    else {
-      const face = Math.atan2(p.fy, p.fx), goal = Math.atan2(-p.y, oppGoalX(p.team) - p.x);
-      const a = rotateTo(face, goal, 1.3); // a first touch can swing it round about 75 degrees
-      dir = { x: Math.cos(a), y: Math.sin(a) };
-    }
-    // Weighted for the run he's about to make (not just how fast he's going this instant)
-    const along = Math.max(0, p.vx * dir.x + p.vy * dir.y);
-    const going = person ? (c.held.s ? SPRINT_SPEED : RUN_SPEED) * c.move.mag : AI_SPEED;
-    const pace = Math.max(along, going * 0.7) + FIRST_TOUCH + (person ? hot / 2 : hot);
-    b.vx = dir.x * pace;
-    b.vy = dir.y * pace;
+    if (person && c.move.mag <= 0.2) return; // it just settles at his feet
+    const face = Math.atan2(p.fy, p.fx), goal = Math.atan2(-p.y, oppGoalX(p.team) - p.x);
+    p.touchDir = person ? Math.atan2(c.move.y, c.move.x) : rotateTo(face, goal, 1.3); // the computer's can swing it round about 75 degrees
+    p.touchLead = Math.min(FIRST_TOUCH_MAX, FIRST_TOUCH + (person ? hot / 2 : hot));
     p.firstTouchUntil = this.t + FIRST_TOUCH_TIME;
   }
 
@@ -1636,7 +1659,8 @@ export class Match {
       this.updateBall(dt);
       this.updateTrickShot();
       if (this.state === 'play') {
-        this.slideContacts();
+        this.pokeContacts();
+        this.slideContacts(dt);
         this.checkPossession();
         this.aiTackles(dt);
       }

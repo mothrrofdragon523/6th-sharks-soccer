@@ -10,6 +10,8 @@ const DELAY = 110;                // ms the joining device plays behind the host
 const FIELDS = ['kickAt', 'kickType', 'gkAct', 'trickUntil', 'trickSide', 'faceBall', 'sprinting', 'leapAt',
   'goalKick', 'stamina', 'exhausted', 'trickReadyAt', 'ballReach', 'diveUntil'];
 
+const BALL_REACH = FIELDS.indexOf('ballReach');
+
 const side = team => (team === AWAY ? 'away' : 'home');
 const teamOf = s => (s === 'away' ? AWAY : s === 'home' ? HOME : null);
 const r1 = v => Math.round(v * 10) / 10;
@@ -94,6 +96,7 @@ export class Mirror {
       p.ballAngle = mixAngle(pa[5], pb[5]);
       p.release = pa[6] || null;
       FIELDS.forEach((f, j) => { p[f] = pa[7 + j]; });
+      p.ballReach = mix(pa[7 + BALL_REACH], pb[7 + BALL_REACH]);
     });
     const ba = a.ball, bb = b.ball, ball = m.ball;
     ball.x = mix(ba[0], bb[0]);

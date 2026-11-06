@@ -12,6 +12,14 @@ const M = 60;                        // grass run-off around the pitch, in units
 const FIELD_W = (F.right - F.left) * S;
 const FIELD_H = (F.bottom - F.top) * S;
 const BALL_SIZE = 0.14;
+// Dribbling touches, played off the real animation: when his boot comes through and meets the ball
+// it goes on a little, then he catches it up again. (All in metres; it's only how it's drawn. Where
+// the ball really is, for tackles, is in sim.js.)
+const TOUCH_JOG = 0.06;      // how far his right boot knocks it on when jogging...
+const TOUCH_SPRINT = 0.2;    // ...and at a flat-out sprint
+const TOUCH_FADE = 7;        // how quickly he catches it up (higher = quicker)
+const TOUCH_SPEED = 2.5;     // the fastest it moves on from his boot, metres per second
+const TOUCH_LETGO = 12;      // after a kick, how quickly the drawn ball blends back to its real path
 
 // A mix of skin tones and hairstyles so the players don't all look the same
 // skin/hair/style are for the simple fallback figures; skinTint/hairTint recolour the Mixamo model.
@@ -143,6 +151,7 @@ export class View {
       v.lastAct = p.gkAct;
       v.hands = ['mixamorigLeftHand', 'mixamorigRightHand'].map(n => model.getObjectByName(n));
       v.foot = model.getObjectByName('mixamorigRightFoot');
+      v.toes = ['mixamorigLeftToe_End', 'mixamorigRightToe_End'].map(n => model.getObjectByName(n));
       this.fadeTo(v, p.role === 'gk' ? 'gkIdle' : 'idle', 0);
     });
     this.applyBadges();
@@ -244,6 +253,26 @@ export class View {
       case 'place': return 'gkPlace';
       default: return null;
     }
+  }
+
+  // How far past its place the dribbled ball is drawn this frame. His boots come from the animation:
+  // if one reaches the ball it can't pass through it, and his right boot also knocks it on a little.
+  footTouch(o, a, r, dt) {
+    const v = this.playerViews[this.match.players.indexOf(o)];
+    if (this.touching !== o) { this.touching = o; v.touchAim = 0; v.touchOut = 0; }
+    v.g.updateMatrixWorld(true);
+    const speed = Math.hypot(o.vx, o.vy) * S, u = Math.min(1, speed / 10);
+    const kick = speed < 1 ? 0 : TOUCH_JOG + (TOUCH_SPRINT - TOUCH_JOG) * u * u;
+    v.touchAim *= Math.exp(-dt * TOUCH_FADE);
+    v.toes.forEach((toe, i) => {
+      const e = toe.matrixWorld.elements;
+      if (e[13] > 0.28) return; // lifted over the top of the ball
+      const toeOut = (e[12] - o.x * S) * Math.cos(a) + (e[14] - o.y * S) * Math.sin(a);
+      const need = toeOut + BALL_SIZE - r;
+      if (need > v.touchAim) v.touchAim = need + (i === 1 ? kick : 0);
+    });
+    v.touchOut += THREE.MathUtils.clamp(v.touchAim - v.touchOut, -TOUCH_SPEED * dt, TOUCH_SPEED * dt);
+    return v.touchOut;
   }
 
   // Where the ball sits while a keeper has it: in his hands, dropping onto his foot for a
@@ -827,9 +856,18 @@ export class View {
       by = 1.1;
     } else if (b.owner && this.playerViews[0].model) {
       // Realistic players dribble with the ball close to their feet (sim.js works out which side)
-      const o = b.owner, a = o.ballAngle, r = FOOT * S * o.ballReach;
-      bx = o.x * S + Math.cos(a) * r;
-      bz = o.y * S + Math.sin(a) * r;
+      const o = b.owner, a = o.ballAngle, r = FOOT * S * o.ballReach, out = this.footTouch(o, a, r, dt);
+      bx = o.x * S + Math.cos(a) * (r + out);
+      bz = o.y * S + Math.sin(a) * (r + out);
+      this.ballOff = { x: Math.cos(a) * out, z: Math.sin(a) * out };
+    } else if (this.ballOff) {
+      // Just kicked or knocked away: no jump from where it was drawn on to its real path
+      const fade = Math.exp(-dt * TOUCH_LETGO);
+      this.ballOff.x *= fade;
+      this.ballOff.z *= fade;
+      bx += this.ballOff.x;
+      bz += this.ballOff.z;
+      if (Math.hypot(this.ballOff.x, this.ballOff.z) < 0.005) this.ballOff = null;
     }
     const dx = bx - this.lastBall.x, dz = bz - this.lastBall.y;
     const moved = Math.hypot(dx, dz);
