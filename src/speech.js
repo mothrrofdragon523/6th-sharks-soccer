@@ -27,16 +27,26 @@ export function unlock() {
   speechSynthesis.speak(u);
 }
 
-export function say(text) {
+// wait: ms before the voice starts (so an answer's chime can finish first)
+let waiting = 0;
+export function say(text, wait = 0) {
   if (!canSpeak) return;
-  speechSynthesis.cancel();
+  stop();
   const u = new SpeechSynthesisUtterance(speakable(text));
   u.rate = 0.9;
-  speechSynthesis.speak(u);
+  if (wait) waiting = setTimeout(() => speechSynthesis.speak(u), wait);
+  else speechSynthesis.speak(u);
 }
 
 export function stop() {
-  if (canSpeak) speechSynthesis.cancel();
+  if (!canSpeak) return;
+  clearTimeout(waiting);
+  speechSynthesis.cancel();
+}
+
+// Is the voice talking right now? (sound.js hushes the game while it does)
+export function isSpeaking() {
+  return canSpeak && (speechSynthesis.speaking || speechSynthesis.pending);
 }
 
 // Math the way you'd say it: "3/4 × 20 = ?" becomes "3 fourths times 20 equals what number".

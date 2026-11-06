@@ -665,11 +665,27 @@
       pointer-events: none;
     }
 
+    #sound-btn {
+      z-index: 9;
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(8px, env(safe-area-inset-right));
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      font-size: 22px;
+      line-height: 1;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.6);
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      border-radius: 8px;
+    }
+    #sound-btn.off { background: rgba(198, 40, 40, 0.8); }
     #fullscreen {
       z-index: 5;
       position: fixed;
       top: max(8px, env(safe-area-inset-top));
-      right: max(8px, env(safe-area-inset-right));
+      right: calc(max(8px, env(safe-area-inset-right)) + 52px); /* beside the sound button */
       padding: 8px 12px;
       font: bold 14px Arial, sans-serif;
       color: #fff;
@@ -811,6 +827,7 @@
   <pre id="debug-box" hidden></pre>
 
   <button id="fullscreen">Full screen</button>
+  <button id="sound-btn" type="button"></button>
   <div id="rotate">Turn your device sideways to play ⚽</div>
 
   <script type="importmap">

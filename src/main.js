@@ -9,6 +9,7 @@ import { HomeworkDeck } from './homework.js';
 import { logAnswer, flush as flushLog } from './log.js';
 import { PLAYERS, pinMatches, savedPlayer, savePlayer } from './player.js';
 import { canSpeak, readAloudOn, setReadAloud, unlock as unlockSpeech, say, stop as stopSpeech } from './speech.js';
+import { SoundCues, playSound, soundOn, setSoundOn, soundStatus, SOUND_NAMES, CHIME_TIME } from './sound.js';
 import { findSubtraction, numberLine } from './numberline.js';
 
 const $ = id => document.getElementById(id);
@@ -237,6 +238,7 @@ function fireworksFrame(now) {
     const x = w * (0.15 + Math.random() * 0.7), y = h * (0.12 + Math.random() * 0.35);
     const colour = FW_COLOURS[(Math.random() * FW_COLOURS.length) | 0];
     const n = 50 + ((Math.random() * 30) | 0), speed = h * (0.25 + Math.random() * 0.15);
+    playSound('pop', 0.6 + Math.random() * 0.4);
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2, s = speed * (0.6 + Math.random() * 0.4);
       fw.sparks.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 1, colour });
@@ -382,6 +384,44 @@ $('switch-player').addEventListener('click', () => {
   showMenuStep('who');
 });
 showMenuStep();
+
+// ---------- Sound: the mute button, and a tap for every button ----------
+const soundBtn = $('sound-btn');
+const cues = new SoundCues(match);
+
+function showSoundBtn() {
+  soundBtn.textContent = soundOn() ? '🔊' : '🔇';
+  soundBtn.classList.toggle('off', !soundOn());
+  soundBtn.setAttribute('aria-label', soundOn() ? 'Turn the sound off' : 'Turn the sound on');
+}
+soundBtn.addEventListener('click', () => {
+  setSoundOn(!soundOn());
+  showSoundBtn();
+  soundBtn.blur(); // or the space bar (shoot) would press it again
+});
+showSoundBtn();
+
+// (Answers get a chime instead: see attempt and record.)
+document.addEventListener('click', e => {
+  if (e.target.closest('button') && !e.target.closest('.choice, .enter, .notebook-done')) playSound('tap');
+});
+// The voice waits for an answer's chime to finish
+const afterChime = () => (soundOn() ? CHIME_TIME : 0);
+
+// Sound check: open the game with ?sounds in the address for a button that plays each sound,
+// for trying out the numbers at the top of sound.js without waiting for it to happen in a game.
+if (new URLSearchParams(location.search).has('sounds')) {
+  const panel = document.createElement('div');
+  panel.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:720px;margin-top:10px';
+  for (const name of SOUND_NAMES) {
+    const b = document.createElement('button');
+    b.className = 'pin-back';
+    b.textContent = name;
+    b.addEventListener('click', e => { e.stopPropagation(); playSound(name); });
+    panel.append(b);
+  }
+  menu.append(panel);
+}
 
 // ---------- 2 Players online ----------
 // One device hosts: it runs the match and sends snapshots of it (sync.js). The other joins with
@@ -873,7 +913,8 @@ function attempt(given, right) {
     quiz.why.textContent = '';
     quiz.go.hidden = true;
     quiz.result.hidden = false;
-    if (readAloudOn()) say(quiz.verdict.textContent);
+    playSound('wrong');
+    if (readAloudOn()) say(quiz.verdict.textContent, afterChime());
     return false;
   }
   record(given, right);
@@ -942,7 +983,8 @@ function record(given, right) {
   quiz.verdict.className = right ? 'yes' : 'no';
   quiz.why.textContent = question.notebook ? '' : question.why;
   showNumberLine(firstTry ? null : findSubtraction(question.q, question.why));
-  if (readAloudOn()) say(resultSpeech());
+  playSound(right ? 'right' : 'wrong');
+  if (readAloudOn()) say(resultSpeech(), afterChime());
   quiz.go.textContent = current.correct ? 'SHOOT! ⚽' : 'Take the shot';
   quiz.go.hidden = false;
   quiz.result.hidden = false;
@@ -1097,6 +1139,7 @@ function updateDebug(now) {
     `player: ${player ? player.name : '-'}  questions: ${player ? player.questions : '-'}  online: ${online ? (online.host ? 'host' : 'joined') : 'no'}`,
     `ball: ${b.owner ? `${b.owner.team.name} ${b.owner.num}` : 'loose'}  you: ${myTeam.name} ${match.pilot(myTeam)?.controlled?.num}`,
     `question card: ${quiz.el.hidden ? 'hidden' : 'showing'}  zoom: ${window.visualViewport ? window.visualViewport.scale.toFixed(2) : '?'}`,
+    `sound: ${soundStatus()}`,
   ].join('\n');
 }
 
@@ -1142,6 +1185,7 @@ function frame(now) {
     view.update(gameDt);
     updateHud();
     shareCard();
+    cues.update(myTeam);
     if (debugBox) updateDebug(now);
   } catch (e) {
     showError(e);
