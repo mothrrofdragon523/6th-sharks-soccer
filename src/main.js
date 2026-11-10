@@ -11,6 +11,7 @@ import { PLAYERS, pinMatches, savedPlayer, savePlayer } from './player.js';
 import { canSpeak, readAloudOn, setReadAloud, unlock as unlockSpeech, say, stop as stopSpeech } from './speech.js';
 import { SoundCues, playSound, soundOn, setSoundOn, soundStatus, SOUND_NAMES, CHIME_TIME } from './sound.js';
 import { findSubtraction, numberLine } from './numberline.js';
+import { celebrate } from './celebration.js';
 
 const $ = id => document.getElementById(id);
 const match = new Match();
@@ -27,7 +28,7 @@ function button(type, key) {
 window.game = { match, view }; // handy for poking at the game from the browser console
 
 // Kit check: open the game with ?kits in the address to line all 16 players up close to the
-// camera (the Sharks in front, the Eagles in a staggered row behind), for checking how
+// camera (the Dragons in front, the Eagles in a staggered row behind), for checking how
 // the kits look on a particular phone or tablet.
 if (new URLSearchParams(location.search).has('kits')) {
   view.ready.then(() => {
@@ -135,10 +136,10 @@ function onGameOver() {
     if (Math.max(s, e) >= 2) {
       series.done = true;
       title = won ? 'CHAMPIONS! 🏆' : 'TOO BAD!';
-      seriesText = s > e ? `The Sharks win the Championship ${s}–${e}!` : `The Eagles win the Championship ${e}–${s}.`;
+      seriesText = s > e ? `The Dragons win the Championship ${s}–${e}!` : `The Eagles win the Championship ${e}–${s}.`;
     } else {
       seriesText = s === e ? `The series is tied ${s}–${e}. On to Game ${series.game + 1}!`
-        : s > e ? `Sharks lead the series ${s}–${e}` : `Eagles lead the series ${e}–${s}`;
+        : s > e ? `Dragons lead the series ${s}–${e}` : `Eagles lead the series ${e}–${s}`;
       mainLabel = `Next Game ▶`;
       resultAction = guest ? askHost : nextSeriesGame;
     }
@@ -147,7 +148,7 @@ function onGameOver() {
   match.banner = null;
   result.el.classList.toggle('won', won);
   result.title.textContent = title;
-  result.score.textContent = `Sharks ${home} – ${away} Eagles`;
+  result.score.textContent = `Dragons ${home} – ${away} Eagles`;
   result.math.textContent = player.questions ? `Math: ${stats.right} of ${stats.total} right${stats.total && stats.right === stats.total ? ' ⭐' : ''}` : '';
   result.math.hidden = !player.questions;
   result.series.textContent = seriesText;
@@ -211,9 +212,9 @@ function showReview() {
 result.review.addEventListener('click', showReview);
 $('review-close').addEventListener('click', () => { review.el.hidden = true; });
 
-// Fireworks: bursts of sparks in Sharks colours that rise, spread, fall and fade
+// Fireworks: bursts of sparks in the Dragons' red and gold that rise, spread, fall and fade
 const fw = { canvas: $('fireworks'), sparks: [], running: false, next: 0, rate: 1 };
-const FW_COLOURS = ['#6cc4ee', '#ffffff', '#fdd835', '#0b2a4a', '#9be3ff', '#ffb300'];
+const FW_COLOURS = ['#ff3d3d', '#ffffff', '#fdd835', '#d32f2f', '#ff8a65', '#ffb300'];
 
 function startFireworks(rate) {
   Object.assign(fw, { sparks: [], running: true, next: 0, rate, last: performance.now() });
@@ -388,6 +389,7 @@ showMenuStep();
 // ---------- Sound: the mute button, and a tap for every button ----------
 const soundBtn = $('sound-btn');
 const cues = new SoundCues(match);
+let seenHome = 0;                     // the Dragons' score last frame, to spot a goal
 
 function showSoundBtn() {
   soundBtn.textContent = soundOn() ? '🔊' : '🔇';
@@ -1191,6 +1193,9 @@ function frame(now) {
     updateHud();
     shareCard();
     cues.update(myTeam);
+    // The dragon's goal celebration, when the Dragons score (on the device that plays them)
+    if (match.score.home > seenHome && myTeam === HOME && match.state !== 'menu') celebrate();
+    seenHome = match.score.home;
     if (debugBox) updateDebug(now);
   } catch (e) {
     showError(e);

@@ -171,14 +171,14 @@ const SPRINT_DRAIN = 1 / 4;   // a full bar lasts 4 seconds of sprinting
 const STAMINA_REGEN = 1 / 9;  // and takes 9 seconds to refill when not sprinting
 const RECOVERED_AT = 0.35;    // after running dry, you can sprint again once back to this level
 
-// Kits. HOME is Gabe's Sharks (light blue), the team a single player controls. AWAY is the Eagles
+// Kits. HOME is Gabe's team, now red with dragon heads (dragon: true), the team a single player controls. AWAY is the Eagles
 // (Eagles green), played by the computer, or by the second person in an online game.
-// To show a team logo on the ad boards and shirts, add e.g. logo: 'assets/sharks-logo.png'.
+// To show a team logo on the ad boards and shirts, add e.g. logo: 'assets/dragons-logo.png'.
 export const HOME = {
-  name: 'SHARKS', dir: 1,
-  kit: { shirt: 0x6cc4ee, trim: 0x0b2a4a, number: '#0b2a4a', outline: null, shorts: 0xf2f2f2, socks: 0x6cc4ee, boots: 0x111111 },
-  gkKit: { shirt: 0xff8f00, trim: 0x0b2a4a, number: '#0b2a4a', outline: null, shorts: 0x0b2a4a, socks: 0xff8f00, boots: 0x111111, gloves: 0x0b2a4a },
-  fans: [0x6cc4ee, 0x6cc4ee, 0x0b2a4a, 0xffffff, 0x6cc4ee, 0x9e9e9e],
+  name: 'DRAGONS', dir: 1, dragon: true, // (kit.dragon puts a dragon head on each player)
+  kit: { shirt: 0xd32f2f, trim: 0x2a0808, number: '#ffffff', outline: '#000000', shorts: 0x2a2a2a, socks: 0xd32f2f, boots: 0x111111, dragon: true },
+  gkKit: { shirt: 0xfdd835, trim: 0x2a0808, number: '#2a0808', outline: null, shorts: 0x2a0808, socks: 0xfdd835, boots: 0x111111, gloves: 0xd32f2f, dragon: true },
+  fans: [0xd32f2f, 0xd32f2f, 0x7f0000, 0xffffff, 0xd32f2f, 0x9e9e9e],
 };
 export const AWAY = {
   name: 'EAGLES', dir: -1,
@@ -271,7 +271,7 @@ export class Match {
     this.banner = null;
   }
 
-  // The people playing: a pilot for each team a person controls (just the Sharks against the
+  // The people playing: a pilot for each team a person controls (just the Dragons against the
   // computer, both teams online). Each has their own joystick and buttons (set by the input code
   // every frame), their own player to steer, and whether their shots ask questions (Gabe's do).
   setPilots(list) {

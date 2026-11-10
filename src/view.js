@@ -1,6 +1,7 @@
 // Draws the match in 3D with a TV-style camera up in the stands along the near touchline.
 import * as THREE from 'three';
 import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, BOX, HOME, AWAY, FOOT } from './sim.js';
+import { dragonLogoURL } from './dragon.js';
 import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, PLAY_SPEED, PLAY_FOR, ANIM_SPEED } from './characters.js';
 
 const S = 0.05;                       // simulation units → metres
@@ -90,7 +91,7 @@ export class View {
       img.onerror = () => resolve(null);
       img.src = src;
     });
-    Promise.all([load(HOME.logo), load(AWAY.logo)]).then(([home, away]) => {
+    Promise.all([load(HOME.dragon ? dragonLogoURL() : HOME.logo), load(AWAY.logo)]).then(([home, away]) => {
       this.drawBoards({ home, away });
       for (const [team, img] of [[HOME, home], [AWAY, away]]) {
         if (!img) continue;
@@ -423,10 +424,10 @@ export class View {
   drawBoards(logos = {}) {
     const g = this.boardCanvas.getContext('2d');
     const panels = [
-      ['#6cc4ee', '#0b2a4a', 'GO SHARKS!', logos.home],
+      ['#d32f2f', '#ffffff', 'GO DRAGONS!', logos.home],
       ['#1f8a80', '#ffffff', 'GO BIRDS!', logos.away],
       ['#111111', '#ffffff', "6TH SHARK'S SOCCER"],
-      ['#0b2a4a', '#6cc4ee', 'FIRST TO 5'],
+      ['#2a0808', '#ff8a80', 'FIRST TO 5'],
     ];
     panels.forEach(([bg, fg, text, logo], i) => {
       g.fillStyle = bg;

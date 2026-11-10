@@ -1,0 +1,8 @@
+# Sound credits
+
+assets/sounds/crowd-roar.wav  - from Freesound "roaringcrowd" by benfree (sound 130568); converted to mono 22 kHz
+assets/sounds/crowd-gasp.wav  - from Freesound "CRWDREAC crowd gasping in surprise" by shangusburger (sound 763875); converted to mono 32 kHz
+
+Licences: check each sound's Freesound page and note it here.
+assets/sounds/crowd-bed.wav   - from Freesound "CRWDREAC-SOCCER Millerntor Stadium Crowd Reaction Goal 01" by itmightgetloud (sound 829455, Sound Of Sankt Pauli); a steady 12 s stretch, loudness levelled and looped with a crossfade
+assets/sounds/dragon-roar.wav - from Freesound "dragon roar short" by vladimirpetrakov (sound 467228); the first roar, trimmed and levelled, mono 32 kHz

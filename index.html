@@ -43,7 +43,7 @@
     }
     #scoreboard span { padding: 6px 10px; display: flex; align-items: center; gap: 6px; }
     #scoreboard .logo { height: 22px; width: auto; }
-    .home { background: #6cc4ee; color: #0b2a4a; }
+    .home { background: #d32f2f; color: #ffffff; }
     .away { background: #1f8a80; }
     #score { background: #111; min-width: 48px; text-align: center; }
     #rule {
@@ -273,7 +273,7 @@
       font: clamp(18px, 5vmin, 28px) 'Arial Black', Arial, sans-serif;
       color: #fff;
       background: rgba(12, 16, 22, 0.85);
-      border: 3px solid #6cc4ee;
+      border: 3px solid #e53935;
       border-radius: 14px;
       cursor: pointer;
     }
@@ -288,15 +288,15 @@
       font: bold clamp(20px, 6vmin, 30px) Arial, sans-serif;
       letter-spacing: 6px;
       text-align: center;
-      border: 3px solid #6cc4ee;
+      border: 3px solid #e53935;
       border-radius: 10px;
     }
     .pin-ok, .pin-back {
       padding: 10px 18px;
       font: bold clamp(15px, 4vmin, 20px) Arial, sans-serif;
       color: #fff;
-      background: #0b2a4a;
-      border: 2px solid #6cc4ee;
+      background: #5a0f0f;
+      border: 2px solid #e53935;
       border-radius: 10px;
       cursor: pointer;
     }
@@ -351,7 +351,7 @@
     #menu-back { padding: 6px 16px; font-size: clamp(13px, 3.4vmin, 16px); }
     #switch-player {
       font: inherit;
-      color: #6cc4ee;
+      color: #e53935;
       text-decoration: underline;
       background: none;
       border: none;
@@ -426,7 +426,7 @@
     #quiz-line { margin-top: 6px; padding: 6px 8px; background: #fff8e1; border-radius: 8px; }
     #quiz-line svg { display: block; width: min(440px, 100%); height: auto; }
     #quiz-line .line-caption { margin: 2px 0 0; font-weight: bold; color: #5d4037; }
-    #read-aloud { font: inherit; color: #6cc4ee; text-decoration: underline; background: none; border: none; padding: 0; cursor: pointer; }
+    #read-aloud { font: inherit; color: #e53935; text-decoration: underline; background: none; border: none; padding: 0; cursor: pointer; }
     #read-aloud-wrap[hidden] { display: none; }
     #quiz-level { font: bold 11px Arial, sans-serif; padding: 3px 8px; border-radius: 10px; color: #fff; }
     .lvl-easy { background: #43a047; }
@@ -568,7 +568,7 @@
       border-radius: 12px;
       cursor: pointer;
     }
-    #result-main { color: #0b2a4a; background: #6cc4ee; border: none; }
+    #result-main { color: #ffffff; background: #d32f2f; border: none; }
     #result-menu { color: #fff; background: transparent; border: 2px solid rgba(255, 255, 255, 0.6); }
     #result-review { flex-basis: 100%; color: #fff; background: #26a69a; border: none; }
     #result-review[hidden] { display: none; }
@@ -713,7 +713,7 @@
 <body>
   <canvas id="scene"></canvas>
 
-  <div id="scoreboard"><span class="home">SHARKS</span><span id="score">0 – 0</span><span class="away">EAGLES</span></div>
+  <div id="scoreboard"><span class="home">DRAGONS</span><span id="score">0 – 0</span><span class="away">EAGLES</span></div>
   <div id="rule">First to 5</div>
   <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
   <div id="toast" hidden></div>
@@ -761,7 +761,7 @@
     </div>
     <div id="lobby" hidden>
       <div class="matchup">
-        <div class="side home"><span>SHARKS</span><strong id="lobby-home"></strong></div>
+        <div class="side home"><span>DRAGONS</span><strong id="lobby-home"></strong></div>
         <div class="vs">VS</div>
         <div class="side away"><span>EAGLES</span><strong id="lobby-away"></strong></div>
       </div>

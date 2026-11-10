@@ -5,7 +5,7 @@
 // PeerJS is only loaded when someone picks 2 Players, so the 1-player game never needs it.
 
 const PEERJS = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
-const PREFIX = 'sixth-sharks-soccer-'; // the code's full name on the matchmaking server
+const PREFIX = 'sixth-dragons-soccer-'; // the code's full name on the matchmaking server
 const CONNECT_WAIT = 12000; // ms to wait for the host to answer
 const SILENT_FOR = 8000;    // ms without hearing anything before the other device counts as gone
 

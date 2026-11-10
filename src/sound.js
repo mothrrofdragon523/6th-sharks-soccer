@@ -35,8 +35,9 @@ const VOLUME = {
   fullTime: 0.2,
   // Crowd reactions
   roar: 0.95,    // your team scores
-  ooh: 0.55,     // so close!
-  groan: 0.5,    // the other team scores
+  dragon: 0.9,   // the dragon's roar in the goal celebration
+  ooh: 0.8,      // so close! (a recording of a crowd gasping)
+  groan: 0.6,    // the other team scores
   // Buttons, question cards and the end of a game
   tap: 0.22,
   question: 0.25, // a question pops up
@@ -47,8 +48,8 @@ const VOLUME = {
 };
 
 // The crowd in the background
-const CROWD_VOLUME = 0.3;  // how loud it is during play
-const HYPE_VOLUME = 0.35;  // how much louder and brighter it gets with the ball right by a goal
+const CROWD_VOLUME = 0.15; // how loud the background crowd is during play: low, so the game's own sounds and the cheers stand out
+const HYPE_VOLUME = 0.5;   // how much louder it gets with the ball right by a goal (0.5 = half as loud again)
 // ...and how much of that you hear at each stage of a game (the rest of the time it's silent)
 const CROWD_LEVEL = { kickoff: 0.8, play: 1, goal: 1, question: 0.3, over: 0.5 };
 const CROWD_FADE = 0.5;    // how slowly the crowd changes, in seconds (bigger = slower)
@@ -63,7 +64,7 @@ export const CHIME_TIME = 450;
 const PITCH_WOBBLE = 0.07; // kicks vary by up to this much (7%), so they don't sound like a machine
 const WOBBLY = new Set(['kick', 'pass', 'touch', 'header', 'bounce', 'boards', 'tackle', 'scuff', 'catch', 'save', 'pop']);
 const SHORTEST_GAP = 0.05; // the same sound can't play twice closer together than this (seconds)...
-const GAPS = { ooh: 1.5, groan: 1.5, roar: 3, tackle: 0.12, scuff: 0.15, touch: 0.1, bounce: 0.08, boards: 0.1, slide: 0.2 }; // ...or these
+const GAPS = { dragon: 3, ooh: 1.5, groan: 1.5, roar: 3, tackle: 0.12, scuff: 0.15, touch: 0.1, bounce: 0.08, boards: 0.1, slide: 0.2 }; // ...or these
 
 // What counts as what in the match (speeds in units a second; 20 units = 1 metre)
 const SAVE_PACE = 250;      // a keeper taking a ball faster than this has made a save
@@ -183,6 +184,50 @@ function swell(a, { sound = 'roar', band = 'bandpass', q = 1, path, attack, hold
   return end;
 }
 
+// Real recordings (in assets/sounds/), used where a made-up sound wasn't convincing. They load in the
+// background; until one has, or if it never does, the made-up version plays instead.
+const RECORDINGS = { roar: 'crowd-roar.wav', gasp: 'crowd-gasp.wav', bed: 'crowd-bed.wav', dragon: 'dragon-roar.wav' };
+const recordings = {};
+function loadRecordings() {
+  for (const [name, file] of Object.entries(RECORDINGS)) {
+    fetch('assets/sounds/' + file)
+      .then(r => r.arrayBuffer())
+      .then(data => new Promise((ok, fail) => ctx.decodeAudioData(data, ok, fail))) // (the old form: older iPads need it)
+      .then(buffer => { recordings[name] = buffer; })
+      .catch(e => console.warn(`Could not load the recording "${file}"; using the made-up sound.`, e));
+  }
+}
+
+// Play part of a recording: len seconds from the start, fading out over the last fade seconds.
+// rate below 1 slows it and lowers its pitch. Returns how long it lasts, or null if it hasn't loaded.
+function clip(a, name, { len, fade = 0.5, rate = 1, level = 1 }) {
+  const buffer = recordings[name];
+  if (!buffer) return null;
+  const { ctx } = a, t = a.t, s = ctx.createBufferSource(), g = ctx.createGain();
+  const play = Math.min(len ?? Infinity, buffer.duration);
+  const real = play / rate;
+  s.buffer = buffer;
+  s.playbackRate.value = rate;
+  g.gain.setValueAtTime(level, t);
+  g.gain.setValueAtTime(level, t + Math.max(0, real - fade));
+  g.gain.linearRampToValueAtTime(0, t + real);
+  s.connect(g);
+  g.connect(a.out);
+  s.start(t, 0, play);
+  return real;
+}
+
+// How loud a recording is t seconds in (0 to 1), so the animation can follow it. null if it hasn't loaded.
+export function loudness(name, t) {
+  const buffer = recordings[name];
+  if (!buffer) return null;
+  const data = buffer.getChannelData(0), rate = buffer.sampleRate, half = Math.round(rate * 0.03);
+  const mid = Math.round(t * rate);
+  let sum = 0, n = 0;
+  for (let i = Math.max(0, mid - half); i < Math.min(data.length, mid + half); i += 4, n++) sum += data[i] * data[i];
+  return n ? Math.min(1, Math.sqrt(sum / n) * 3) : 0;
+}
+
 // A brass-band note
 function brass(a, at, hz, len) {
   for (const detune of [0.997, 1.003]) {
@@ -281,10 +326,11 @@ const SOUNDS = {
     blast(a, 0.84, 0.95);
     return 1.85;
   },
-  roar: a => swell(a, { band: 'lowpass', q: 0.5, path: [[900, 0], [3400, 0.6], [2400, 3.2], [1200, 5.4]], attack: 0.3, hold: 2.6, release: 2.6 }),
-  ooh: a => swell(a, { q: 1.6, path: [[350, 0], [700, 0.35], [420, 1.3]], attack: 0.2, hold: 0.35, release: 0.85, level: 2.5 }), // (a narrow filter lets little through)
-  groan: a => swell(a, { q: 1.4, path: [[650, 0], [280, 1.4]], attack: 0.15, hold: 0.3, release: 1.1, level: 2.5 }),
-  crowd: a => swell(a, { sound: 'bed', band: 'lowpass', q: 0.5, path: [[6000, 0]], attack: 0.3, hold: 4, release: 0.5 }),
+  roar: a => clip(a, 'roar', { len: 7, fade: 2.5 }) ?? swell(a, { sound: 'cheer', band: 'lowpass', q: 0.5, path: [[1500, 0], [4500, 0.4], [3800, 3.2], [1800, 5.4]], attack: 0.15, hold: 2.8, release: 2.6, level: 1.3 }),
+  ooh: a => clip(a, 'gasp', { fade: 0.3 }) ?? swell(a, { q: 1.6, path: [[350, 0], [700, 0.35], [420, 1.3]], attack: 0.2, hold: 0.35, release: 0.85, level: 2.5 }), // (a narrow filter lets little through)
+  dragon: a => clip(a, 'dragon', { fade: 0.1 }) ?? 0.01,
+  groan: a => clip(a, 'gasp', { fade: 0.4, rate: 0.82, level: 0.7 }) ?? swell(a, { q: 1.4, path: [[650, 0], [280, 1.4]], attack: 0.15, hold: 0.3, release: 1.1, level: 2.5 }),
+  crowd: a => clip(a, 'bed', { len: 6, fade: 1 }) ?? swell(a, { sound: 'bed', band: 'lowpass', q: 0.5, path: [[6000, 0]], attack: 0.3, hold: 4, release: 0.5 }),
   tap(a) {
     tone(a, { from: 1150, to: 800, len: 0.03 });
     return 0.05;
@@ -345,7 +391,7 @@ function noiseBuffer(ctx) {
 
 // Lots of people at once: hiss in several pitch bands, each swelling and fading on its own, with
 // single voices calling out over the top. It loops without a join you can hear.
-function crowdLoop(ctx, seconds, bands, voices) {
+function crowdLoop(ctx, seconds, bands, voices, claps) {
   const n = seconds * STORE_RATE, fade = STORE_RATE >> 1, raw = new Float32Array(n + fade);
   for (const { hz, q, level, flutter } of bands) {
     const w = 2 * Math.PI * hz / STORE_RATE, alpha = Math.sin(w) / (2 * q), a0 = 1 + alpha;
@@ -361,7 +407,7 @@ function crowdLoop(ctx, seconds, bands, voices) {
   }
   for (let v = 0; v < voices.count; v++) {
     const len = (0.18 + Math.random() * 0.5) * STORE_RATE | 0, start = Math.random() * (raw.length - len) | 0;
-    const hz = voices.low + Math.random() * (voices.high - voices.low), slide = (Math.random() - 0.4) * 0.35;
+    const hz = voices.low + Math.random() * (voices.high - voices.low), slide = (Math.random() - (voices.rise ? 0.1 : 0.4)) * 0.35;
     const shake = (4 + Math.random() * 3) * 2 * Math.PI / STORE_RATE, level = voices.level * (0.4 + Math.random() * 0.6);
     let phase = Math.random() * 6.28;
     for (let i = 0; i < len; i++) {
@@ -369,6 +415,12 @@ function crowdLoop(ctx, seconds, bands, voices) {
       phase += 2 * Math.PI * f / STORE_RATE;
       raw[start + i] += level * e * e * (Math.sin(phase) + 0.5 * Math.sin(2 * phase) + 0.25 * Math.sin(3 * phase));
     }
+  }
+  // Hands clapping: lots of tiny, sharp pops scattered through it
+  for (let c = 0; c < (claps?.count ?? 0); c++) {
+    const len = 0.012 * STORE_RATE | 0, start = Math.random() * (raw.length - len) | 0, level = claps.level * (0.3 + Math.random() * 0.7);
+    let lp = 0;
+    for (let i = 0; i < len; i++) { lp += (Math.random() * 2 - 1 - lp) * 0.6; raw[start + i] += lp * level * (1 - i / len) ** 2; }
   }
   // Fade the extra bit on the end into the start, so the loop has no join
   let peak = 0;
@@ -396,6 +448,11 @@ function crowdBuffers(ctx) {
       { hz: 2200, q: 1, level: 0.5, flutter: 6 },
       { hz: 3600, q: 1.2, level: 0.2, flutter: 7 },
     ], { count: 40, low: 300, high: 900, level: 0.05 }),
+    // A cheer for a goal: mostly people shouting (rising "yeah!"s) and clapping, with little hiss
+    cheer: crowdLoop(ctx, 5, [
+      { hz: 500, q: 0.8, level: 0.25, flutter: 4 },
+      { hz: 1100, q: 0.9, level: 0.25, flutter: 5 },
+    ], { count: 110, low: 260, high: 700, level: 0.07, rise: true }, { count: 260, level: 0.5 }),
   };
 }
 
@@ -442,7 +499,7 @@ function startAudio() {
   master.connect(limiter);
   limiter.connect(ctx.destination);
   setLevels();
-  setTimeout(() => crowdBuffers(ctx), 200); // work out the crowd now, not when the game kicks off
+  loadRecordings();
   return true;
 }
 
@@ -483,42 +540,29 @@ export function soundStatus() {
   return `${ctx ? ctx.state : 'waiting for a tap'}, ${on ? 'on' : 'muted'}  last: ${recent.slice(-3).join(' ') || '-'}`;
 }
 
-// The crowd in the background: a steady murmur, plus an excited layer that comes up near the goals
-function startCrowd(buffers) {
-  const loop = (buffer, gain) => {
-    const s = ctx.createBufferSource();
-    s.buffer = buffer;
-    s.loop = true;
-    s.connect(gain);
-    s.start();
-  };
-  const bed = ctx.createGain(), hype = ctx.createGain(), bright = ctx.createBiquadFilter();
-  bed.gain.value = 0;
-  hype.gain.value = 0;
-  bright.type = 'lowpass';
-  bright.frequency.value = 2200;
-  bed.connect(master);
-  hype.connect(bright);
-  bright.connect(master);
-  loop(buffers.bed, bed);
-  loop(buffers.roar, hype);
-  crowd = { bed, hype, level: 0, excited: 0 };
+// The crowd in the background: a steady recording (crowd-bed.wav) on a loop, a little louder when the
+// ball is near a goal. It starts once the recording has loaded; if it never does, there's no background.
+function startCrowd() {
+  const gain = ctx.createGain(), s = ctx.createBufferSource();
+  gain.gain.value = 0;
+  s.buffer = recordings.bed;
+  s.loop = true;
+  s.connect(gain);
+  gain.connect(master);
+  s.start();
+  crowd = { gain, level: 0, excited: 0 };
 }
 
 function setCrowd(level, excited) {
   if (!ctx || ctx.state !== 'running') return;
   if (!crowd) {
-    if (!level || !crowdNoise) return;
-    startCrowd(crowdNoise);
+    if (!level || !recordings.bed) return;
+    startCrowd();
   }
-  const t = ctx.currentTime;
-  if (Math.abs(level - crowd.level) > 0.01) {
+  if (Math.abs(level - crowd.level) > 0.01 || Math.abs(excited - crowd.excited) > 0.03) {
     crowd.level = level;
-    crowd.bed.gain.setTargetAtTime(level * CROWD_VOLUME, t, CROWD_FADE);
-  }
-  if (Math.abs(excited - crowd.excited) > 0.03) {
     crowd.excited = excited;
-    crowd.hype.gain.setTargetAtTime(excited * level * HYPE_VOLUME, t, CROWD_FADE);
+    crowd.gain.gain.setTargetAtTime(level * CROWD_VOLUME * (1 + excited * HYPE_VOLUME), ctx.currentTime, CROWD_FADE);
   }
 }
 

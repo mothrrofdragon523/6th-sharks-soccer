@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { putDragonOnPlayer } from './dragon.js';
 
 const DIR = 'assets/mixamo/';
 const PACK = DIR + 'Soccer Game Pack/';
@@ -138,6 +139,7 @@ export async function loadCharacters() {
   return {
     base, clips,
     scale: 1.8 / height,
+    headSize: height * 0.13,
     shirtImage: await imageOf(parts.Tops.material.map),
     shortsImage: await imageOf(parts.Bottoms.material.map),
   };
@@ -313,5 +315,6 @@ export function makeModel(assets, kit, textures, look) {
     if (o.name === 'Hair') o.material.color.setHex(look.hairTint);
     if (o.name === 'Shoes' && kit.boots < 0x444444) o.material.color.setHex(0x3a3a3a);
   });
+  if (kit.dragon) putDragonOnPlayer(model, assets.headSize);
   return model;
 }
