@@ -134,18 +134,19 @@ const EAGLE_TRICK_RANGE = 320;     // ...from within 16 m
 const EAGLE_TRICK_REACH = 0.5;     // how much of the way across Gabe's keeper gets to one
 const EAGLE_TRICK_CATCH = 0.5;     // ...and how often he holds on to it rather than parrying it
 
-// He can shoot from anywhere. Where he shoots from is measured like a football yard line: the
-// fraction of the pitch between him and the goal he's attacking (0 = on the goal line, 1 = on his
-// own goal line). The pitch splits into thirds: easy questions in the third nearest goal, medium
-// in the middle, hard in the third nearest his own goal.
-export const shotLevel = fraction => (fraction < 1 / 3 ? 'easy' : fraction < 2 / 3 ? 'medium' : 'hard');
-// His chance of scoring: 90% from the "10-yard line", 80% from the 20, down to 10% from his own 10.
-// A right answer (first try) adds a boost for the question's level; a wrong one halves the chance.
-const ANSWER_BOOST = { easy: 0.05, medium: 0.1, hard: 0.15 };
-export function scoringChance(fraction, level, right) {
-  const base = 1 - fraction;
-  const chance = right ? base + (ANSWER_BOOST[level] || 0) : base / 2;
-  return Math.min(0.99, Math.max(0.01, chance));
+// Nobody can shoot from their own half (see canShoot). How far out a shot is is measured in whole
+// metres to the middle of the goal (shotDistance, rounded), the number the question card shows.
+// The attacking half splits into three bands: easy questions within 15 m, medium out to 30 m,
+// hard from further out (halfway is 45 m away, and over 50 m from out by the side).
+export const shotLevel = metres => (metres < 15 ? 'easy' : metres < 30 ? 'medium' : 'hard');
+// His chance of scoring goes down steadily the further out he is. With a right answer (first
+// try) it's 1.4% less for every metre: 86% from 10 m, 72% from 20 m, 58% from 30 m and 37% from
+// halfway (never over 97% or under 20%). A wrong answer halves it. Nothing else changes it, so
+// the closer he gets, the better his chance.
+const CHANCE_LOST_PER_METRE = 0.014;
+export function scoringChance(metres, right) {
+  const chance = Math.min(0.97, Math.max(0.2, 1 - metres * CHANCE_LOST_PER_METRE));
+  return right ? chance : chance / 2;
 }
 // Stamina runs from 1 (fresh) to 0 (exhausted).
 const SPRINT_DRAIN = 1 / 4;   // a full bar lasts 4 seconds of sprinting
@@ -350,19 +351,18 @@ export class Match {
       if (hasBall) this.humanPass(c); else this.switchPlayer(c);
     } else if (key === 'b') {
       if (!hasBall) this.humanTackle(c);
+      else if (!this.canShoot(c.controlled)) this.tooFarToShoot(team);
       else { c.charging = true; c.chargeStart = this.t; }
     }
   }
 
-  // Shots are only allowed once you've reached the halfway line (the Eagles' rule; Gabe can shoot
-  // from anywhere, and the further out he is, the lower his chance of scoring)
+  // Nobody can shoot from their own half: only once they've reached the halfway line.
   canShoot(p) {
     return p.x * p.team.dir >= 0;
   }
 
-  // How far up the pitch p is from the goal he's attacking: 0 on its goal line, 1 on his own
-  shotFraction(p) {
-    return Math.min(1, Math.max(0, (oppGoalX(p.team) - p.x) * p.team.dir / (F.right - F.left)));
+  tooFarToShoot(team) {
+    this.showToast('GET PAST HALFWAY TO SHOOT', 1.5, team);
   }
 
   // Metres from p to the middle of the goal he's attacking
@@ -412,10 +412,11 @@ export class Match {
     const me = c.controlled, m = c.move;
     // Aim with the joystick; with no aim, go for the far post.
     const aimY = m.mag > 0.2 ? m.y : (me.y < 0 ? 0.6 : -0.6), power = this.power(c.team);
+    if (!this.canShoot(me)) { this.tooFarToShoot(c.team); return; } // dribbled back over halfway
     this.onBall(me, () => {
       if (!c.questions) { this.shoot(me, power, aimY); return; }
       // The question's difficulty and his chance of scoring depend on how far out he's shooting from
-      this.pendingShot = { team: c.team, shooter: me, aimY, distance: this.shotDistance(me), fraction: this.shotFraction(me) };
+      this.pendingShot = { team: c.team, shooter: me, aimY, distance: this.shotDistance(me) };
       this.state = 'question';
     });
   }
@@ -553,24 +554,40 @@ export class Match {
   }
 
   // A scripted shot crossing the goal line: does it hit the post or the bar?
-  woodwork(prevX) {
+  // (prev: where the ball was before this frame)
+  woodwork(prev) {
     const b = this.ball;
     if (b.hitWood || (b.outcome !== 'bar' && b.outcome !== 'post')) return;
-    const gx = b.vx > 0 ? F.right : F.left;
-    if ((prevX - gx) * (b.x - gx) > 0) return; // hasn't reached the line yet
+    const c = this.lineCrossing(prev);
+    if (!c) return; // hasn't reached the line yet
     const R = BALL_R + POST_R;
-    if (b.outcome === 'bar' && Math.abs(b.y) < GOAL_HALF && Math.abs(b.z - CROSSBAR) < R) {
+    const hits = b.outcome === 'bar' ? Math.abs(c.y) < GOAL_HALF && Math.abs(c.z - CROSSBAR) < R
+      : Math.abs(Math.abs(c.y) - GOAL_HALF) < R && c.z < CROSSBAR;
+    if (!hits) return;
+    b.x = c.x; b.y = c.y; b.z = c.z; // back to where it met the woodwork
+    if (b.outcome === 'bar') {
       // Clips the top of the bar and loops up over it
       b.vz = Math.abs(b.vz) * 0.4 + 150;
       b.vx *= 0.45; b.vy *= 0.6;
       this.showToast('OFF THE BAR!', 2);
-    } else if (b.outcome === 'post' && Math.abs(Math.abs(b.y) - GOAL_HALF) < R && b.z < CROSSBAR) {
+    } else {
       // Glances off the outside of the post and goes wide
       b.vy = Math.sign(b.y) * (Math.abs(b.vx) * 0.45 + 60);
       b.vx *= 0.5;
       this.showToast('OFF THE POST!', 2);
-    } else return;
+    }
     b.hitWood = this.t; // the view shakes the camera
+  }
+
+  // Where the ball crossed a goal line during this frame, or null if it didn't. It can move over
+  // a metre in one frame (more on a slow iPad), so this works back from where it was before
+  // (prev) to the exact spot, rather than going by where it's got to.
+  lineCrossing(prev) {
+    const b = this.ball;
+    const x = b.x > prev.x ? F.right : F.left, s = Math.sign(x);
+    if ((prev.x - x) * s >= 0 || (b.x - x) * s < 0) return null; // already over it, or not there yet
+    const u = (x - prev.x) / (b.x - prev.x);
+    return { x, y: prev.y + (b.y - prev.y) * u, z: prev.z + (b.z - prev.z) * u };
   }
 
   // Pass = throw, Shoot = drop kick, Sprint = roll it out. On a goal kick: Pass = short, Shoot = long.
@@ -1531,7 +1548,7 @@ export class Match {
   }
 
   updateBall(dt) {
-    const b = this.ball, prevX = b.x;
+    const b = this.ball, prev = { x: b.x, y: b.y, z: b.z };
     if (b.owner && b.owner.role !== 'gk') {
       this.carry(b.owner, dt);
     } else if (b.owner) {
@@ -1566,13 +1583,25 @@ export class Match {
     if (b.y < F.top + BALL_R) { b.y = F.top + BALL_R; b.vy = Math.abs(b.vy) * 0.7; }
     if (b.y > F.bottom - BALL_R) { b.y = F.bottom - BALL_R; b.vy = -Math.abs(b.vy) * 0.7; }
     const inMouth = Math.abs(b.y) < GOAL_HALF - BALL_R;
-    if (b.scripted) this.woodwork(prevX);
+    if (b.scripted) this.woodwork(prev);
     else if (!inMouth) { // (a scripted shot that misses goes on out for a goal kick)
       if (b.x < F.left + BALL_R) { b.x = F.left + BALL_R; b.vx = Math.abs(b.vx) * 0.7; }
       if (b.x > F.right - BALL_R) { b.x = F.right - BALL_R; b.vx = -Math.abs(b.vx) * 0.7; }
     }
 
-    const under = b.z < CROSSBAR && Math.abs(b.y) < GOAL_HALF;
+    // A shot that's meant to go in counts the moment it crosses the line between the posts. From
+    // close in at an angle it's going so far sideways that waiting for the whole ball to be over
+    // the line (below) would let it slip past the far post first, and a sure goal would miss.
+    const c = b.scripted && b.outcome === 'goal' && this.lineCrossing(prev);
+    if (c && Math.abs(c.y) < GOAL_HALF && c.z < CROSSBAR) {
+      b.owner = null;
+      this.goalScored(c.x === F.right ? HOME : AWAY);
+      return;
+    }
+
+    // Any other ball is in once all of it is over the line, between the posts and under the bar.
+    // A shot that's meant to miss never goes in, so what the dice decided is what he sees.
+    const under = b.z < CROSSBAR && Math.abs(b.y) < GOAL_HALF && !(b.scripted && b.outcome !== 'goal');
     if (b.x < F.left - BALL_R) {
       if (under) { b.owner = null; this.goalScored(AWAY); } else this.goalKick(HOME);
     } else if (b.x > F.right + BALL_R) {

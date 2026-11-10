@@ -26,7 +26,7 @@ export function snapshot(m, at) {
     type: 'snap', at, t: r3(m.t), state: m.state, score: m.score, banner: m.banner,
     toast: m.toast && { text: m.toast.text, until: m.toast.until, team: m.toast.team && side(m.toast.team) },
     timeScale: m.timeScale, trick: !!m.trickShot,
-    shot: shot && { team: side(shot.team), distance: shot.distance, fraction: shot.fraction },
+    shot: shot && { team: side(shot.team), distance: shot.distance },
     pilots: [...m.pilots.values()].map(c => [side(c.team), idx(c.controlled), idx(c.keeperAim), c.charging, r3(c.chargeStart)]),
     ball: [r1(b.x), r1(b.y), r1(b.z), r1(b.vx), r1(b.vy), idx(b.owner), b.style || null, !!b.scripted, b.hitWood || 0],
     players: m.players.map(p => [r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), r3(p.angle), r3(p.ballAngle), !!p.release,

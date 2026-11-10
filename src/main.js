@@ -734,12 +734,12 @@ function askQuestion() {
   input.releaseAll();
   stopWatching();
   quiz.title.textContent = '⚽ SHOT ON GOAL!';
-  const { distance, fraction } = match.pendingShot;
-  const metres = Math.round(distance);
-  const zone = shotLevel(fraction);
+  const metres = Math.round(match.pendingShot.distance);
+  const zone = shotLevel(metres);
   const question = deck.next(zone); // homework ignores this and goes in worksheet order
-  // His chance of scoring from here, with a right answer and with a wrong one
-  const odds = { right: scoringChance(fraction, zone, true), wrong: scoringChance(fraction, zone, false) };
+  // His chance of scoring from here, with a right answer and with a wrong one: the same at the
+  // same distance, and always better closer in
+  const odds = { right: scoringChance(metres, true), wrong: scoringChance(metres, false) };
   current = { question, odds, metres, correct: null, typed: '', tries: 0, given: [] };
   quiz.el.hidden = false;
   quiz.el.classList.toggle('has-graph', !!question.graph);
@@ -921,8 +921,8 @@ function attempt(given, right) {
   return true;
 }
 
-// Whether the shot goes in is a roll of the dice: his chance (current.odds) depends on how far out
-// he is, goes up with a right answer (first try) and halves with a wrong one.
+// Whether the shot goes in is a roll of the dice: his chance (current.odds) is higher the closer
+// in he is (see scoringChance) and halves with a wrong answer.
 // It decides the shot (see SHOTS in sim.js): a right answer that scores is a header, a volley
 // or a low strike; a wrong one that scores just gets hit in. Misses are cooler the closer he got:
 // a bicycle kick off the bar, a volley off the post, or a blast over the bar. Answers that aren't
@@ -1080,10 +1080,11 @@ function updateHud() {
     setText(hud.s, 'SPRINT');
   }
   hud.b.classList.toggle('defend', !attack && !keeper);
-  // SHOOT's ring shows how hard the question will be from where he is
+  // SHOOT's ring shows how hard the question will be from where he is. In his own half, where
+  // he can't shoot, the button is dimmed.
   const shooting = attack && !keeper;
   const me = pilot.controlled;
-  const zone = shooting ? shotLevel(match.shotFraction(me)) : null;
+  const zone = shooting && match.canShoot(me) ? shotLevel(Math.round(match.shotDistance(me))) : null;
   hud.b.classList.toggle('off', shooting && !zone);
   for (const lvl of ['easy', 'medium', 'hard']) hud.b.classList.toggle(`zone-${lvl}`, zone === lvl);
   hud.s.classList.toggle('off', !!(keeper && keeper.goalKick));
