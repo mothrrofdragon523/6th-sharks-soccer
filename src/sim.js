@@ -6,6 +6,11 @@ export const F = { left: -900, right: 900, top: -500, bottom: 500 }; // the pitc
 export const GOAL_HALF = 85;   // half the width of the goal mouth
 export const GOAL_DEPTH = 36;
 export const CROSSBAR = 48;
+// The goalie box: the bigger box painted in front of each goal (7.5 m deep, 17 m wide). It's the
+// keeper's. Nobody else may shoot from inside it, take the ball into it, or go into it at all,
+// except to get a loose ball that's in there (see keepOutOfBoxes).
+export const BOX = { depth: 150, half: 170 };
+const BOX_EXIT_SPEED = 170;   // how fast a player who shouldn't be in the box is walked back out
 export const PLAYER_R = 18;
 export const BALL_R = 9;
 const BODY_GAP = 22;           // two players' middles can't get closer than this (1.1 m, shoulder to shoulder)
@@ -134,7 +139,8 @@ const EAGLE_TRICK_RANGE = 320;     // ...from within 16 m
 const EAGLE_TRICK_REACH = 0.5;     // how much of the way across Gabe's keeper gets to one
 const EAGLE_TRICK_CATCH = 0.5;     // ...and how often he holds on to it rather than parrying it
 
-// Nobody can shoot from their own half (see canShoot). How far out a shot is is measured in whole
+// Nobody can shoot from their own half or from in the goalie box (see noShot), so the closest
+// shot is from the edge of the box, about 8 m out. How far out a shot is is measured in whole
 // metres to the middle of the goal (shotDistance, rounded), the number the question card shows.
 // The attacking half splits into three bands: easy questions within 15 m, medium out to 30 m,
 // hard from further out (halfway is 45 m away, and over 50 m from out by the side).
@@ -194,6 +200,18 @@ function rotateTo(a, target, step) {
 }
 const ownGoalX = team => (team.dir === 1 ? F.left : F.right);
 const oppGoalX = team => (team.dir === 1 ? F.right : F.left);
+// Is the spot q inside a goalie box? If so: how far in (pen), and the shortest way out (nx, ny),
+// which is straight up the pitch or out past the side of the box. Otherwise null.
+function inBox(q) {
+  const front = Math.abs(q.x) - (F.right - BOX.depth), side = BOX.half - Math.abs(q.y);
+  if (front <= 0 || side <= 0) return null;
+  return front <= side ? { pen: front, nx: -Math.sign(q.x), ny: 0 } : { pen: side, nx: 0, ny: q.y < 0 ? -1 : 1 };
+}
+// The nearest spot to (x, y) that's clear of the goalie boxes (for the computer's players to head for)
+function clearOfBox(x, y) {
+  const hit = inBox({ x, y });
+  return hit ? [x + hit.nx * (hit.pen + 12), y + hit.ny * (hit.pen + 12)] : [x, y];
+}
 
 export class Match {
   constructor() {
@@ -215,6 +233,7 @@ export class Match {
           diveUntil: 0, diveMoveUntil: 0, diveSpeed: 0, gkAct: null, release: null, faceBall: false,
           lockUntil: 0, leapAt: -10, dragUntil: 0, dragAngle: 0, ballPull: 0, ballAngle: 0, ballReach: 1,
           onBall: null, onBallUntil: 0, slideAt: 0, slideUntil: 0, slideDir: 0, slideDone: false, tripAt: 0, tripUntil: 0, tripDir: 0, gotUp: true,
+          boxPen: 0, // how far into a goalie box he's been let (see keepOutOfBoxes)
         };
         this.players.push(p);
         this.teams.get(team).push(p);
@@ -276,6 +295,7 @@ export class Match {
       p.dragUntil = 0; p.ballPull = 0; p.slideUntil = 0; p.tripUntil = 0; p.onBall = null; p.pokeUntil = 0; p.firstTouchUntil = 0;
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
+      p.boxPen = 0;
     }
     const kicker = this.teams.get(team).find(p => p.role === 'fw');
     kicker.x = -team.dir * FOOT; // the ball on the spot at his feet
@@ -351,18 +371,26 @@ export class Match {
       if (hasBall) this.humanPass(c); else this.switchPlayer(c);
     } else if (key === 'b') {
       if (!hasBall) this.humanTackle(c);
-      else if (!this.canShoot(c.controlled)) this.tooFarToShoot(team);
+      else if (!this.canShoot(c.controlled)) this.refuseShot(c);
       else { c.charging = true; c.chargeStart = this.t; }
     }
   }
 
-  // Nobody can shoot from their own half: only once they've reached the halfway line.
-  canShoot(p) {
-    return p.x * p.team.dir >= 0;
+  // Why p can't shoot from where he is (told to the person playing him), or null if he can.
+  // Nobody shoots from their own half, only once they've reached the halfway line, and nobody
+  // shoots from inside the goalie box.
+  noShot(p) {
+    if (p.x * p.team.dir < 0) return 'GET PAST HALFWAY TO SHOOT';
+    if (inBox(p)) return 'NO SHOOTING IN THE GOALIE BOX';
+    return null;
   }
 
-  tooFarToShoot(team) {
-    this.showToast('GET PAST HALFWAY TO SHOOT', 1.5, team);
+  canShoot(p) {
+    return !this.noShot(p);
+  }
+
+  refuseShot(c) {
+    this.showToast(this.noShot(c.controlled), 1.5, c.team);
   }
 
   // Metres from p to the middle of the goal he's attacking
@@ -412,7 +440,7 @@ export class Match {
     const me = c.controlled, m = c.move;
     // Aim with the joystick; with no aim, go for the far post.
     const aimY = m.mag > 0.2 ? m.y : (me.y < 0 ? 0.6 : -0.6), power = this.power(c.team);
-    if (!this.canShoot(me)) { this.tooFarToShoot(c.team); return; } // dribbled back over halfway
+    if (!this.canShoot(me)) { this.refuseShot(c); return; } // dribbled back over halfway while winding up
     this.onBall(me, () => {
       if (!c.questions) { this.shoot(me, power, aimY); return; }
       // The question's difficulty and his chance of scoring depend on how far out he's shooting from
@@ -1227,7 +1255,7 @@ export class Match {
       x = b.x + dir * 320;
       y = b.y * 0.3;
     }
-    return [clamp(x, F.left + 80, F.right - 80), clamp(y, F.top + 40, F.bottom - 40)];
+    return clearOfBox(clamp(x, F.left + 80, F.right - 80), clamp(y, F.top + 40, F.bottom - 40));
   }
 
   coverSpot(p) {
@@ -1245,7 +1273,7 @@ export class Match {
       x = b.x * 0.4 + dir * 120;
       y = b.y * 0.3;
     }
-    return [clamp(x, F.left + 40, F.right - 40), clamp(y, F.top + 40, F.bottom - 40)];
+    return clearOfBox(clamp(x, F.left + 40, F.right - 40), clamp(y, F.top + 40, F.bottom - 40));
   }
 
   aiWithBall(p) {
@@ -1446,6 +1474,41 @@ export class Match {
           c.x += nx * push; c.y += ny * push;
         }
       }
+    }
+    this.keepOutOfBoxes(dt);
+  }
+
+  // Is there a loose ball in the goalie box at this end (side: -1 the left goal, 1 the right)
+  // for players to go in after? A save pushed away or a shot back off the boards counts. A ball
+  // a keeper is holding doesn't, nor does a pass or one of Gabe's shots on its way through.
+  looseInBox(side) {
+    const b = this.ball;
+    return !b.owner && !b.scripted && !(b.passTarget && this.t < b.passUntil) && b.x * side > 0 && !!inBox(b);
+  }
+
+  // The goalie boxes belong to the keepers. Anyone else is stopped at the line, with the ball or
+  // without it, unless there's a loose ball in there to go and get. Once that ball's been
+  // gathered, whoever is still inside (even the player who got it) is walked straight back out.
+  keepOutOfBoxes(dt) {
+    const open = { '-1': this.looseInBox(-1), 1: this.looseInBox(1) };
+    for (const p of this.players) {
+      if (p.role === 'gk') continue;
+      const hit = inBox(p);
+      if (!hit) { p.boxPen = 0; continue; }
+      if (open[Math.sign(p.x)]) { p.boxPen = hit.pen; continue; }
+      // Not allowed in: no deeper than he already was, and (unless he's on the ground) less each frame
+      const allowed = Math.max(0, p.boxPen - (this.down(p) ? 0 : BOX_EXIT_SPEED * dt));
+      if (hit.pen > allowed) {
+        const push = hit.pen - allowed;
+        p.x += hit.nx * push;
+        p.y += hit.ny * push;
+        const into = -(p.vx * hit.nx + p.vy * hit.ny); // how fast he's trying to go further in
+        if (into > 0) { p.vx += hit.nx * into; p.vy += hit.ny * into; } // he slides along the line instead
+        if (into > 40 && p.boxPen === 0 && this.isControlled(p) && !this.toast) {
+          this.showToast('ONLY THE GOALIE GOES IN THE BOX', 1.2, p.team);
+        }
+      }
+      p.boxPen = Math.min(hit.pen, allowed);
     }
   }
 

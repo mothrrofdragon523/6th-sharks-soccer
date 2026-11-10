@@ -1,6 +1,6 @@
 // Draws the match in 3D with a TV-style camera up in the stands along the near touchline.
 import * as THREE from 'three';
-import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, HOME, AWAY, FOOT } from './sim.js';
+import { F, GOAL_HALF, GOAL_DEPTH, CROSSBAR, BOX, HOME, AWAY, FOOT } from './sim.js';
 import { loadCharacters, kitTextures, makeModel, renderFanAtlas, FAN_SIZE, START, PLAY_SPEED, PLAY_FOR, ANIM_SPEED } from './characters.js';
 
 const S = 0.05;                       // simulation units → metres
@@ -345,7 +345,7 @@ export class View {
         const x0 = side < 0 ? edge : edge - depth;
         g.strokeRect(px(x0), py(-half), depth * K, half * 2 * K);
       };
-      box(150, 170);
+      box(BOX.depth, BOX.half); // the goalie box
       box(55, 100);
       g.beginPath(); g.arc(px(edge - side * 110), py(0), 5, 0, Math.PI * 2); g.fill();
     }
