@@ -57,19 +57,21 @@ export const CLIPS = {
   gkDropKick: 'goalkeeper drop kick',
   gkRoll: 'goalkeeper pass',            // bowls the ball out along the ground
   gkPlace: 'goalkeeper placing ball',   // puts the ball down for a goal kick
+  // A throw-in: the ball goes back behind his head and over it. (Waiting to take one, he holds it like a keeper.)
+  throwIn: 'throw in',
 };
 // Where to start each one-off move (seconds), so the foot meets the ball about when the game kicks it
 export const START = {
   pass: 0.05, shoot: 0.35, poke: 0.05, dragR: 0.15, dragL: 0.15, flick: 0.4, header: 0.4, bicycle: 0.3, knee: 0,
   gkCatch: 0.4, gkCatchChest: 0.1, gkCatchLeap: 1.0, gkCatchHigh: 0.35, gkScoop: 0.45,
   gkDiveL: 0.55, gkDiveR: 0.55, gkBlockL: 0.45, gkBlockL2: 0.6, gkBlockR: 0.4, gkMiss: 0.3,
-  gkThrow: 0.3, gkDropKick: 1.0, gkRoll: 0.5,
+  gkThrow: 0.3, gkDropKick: 1.0, gkRoll: 0.5, throwIn: 0.55,
 };
 // Playback speed for one-off moves (kicks default to 1.25, keeper moves to 1)
-export const PLAY_SPEED = { slide: 1.25, trip: 1.4, getUp: 1.8, header: 1, bicycle: 1, knee: 1, poke: 1.4, dragR: 1.3, dragL: 1.3, gkDiveL: 1.3, gkDiveR: 1.3, gkBlockL: 1.3, gkBlockL2: 1.3, gkBlockR: 1.3, gkThrow: 1.2, gkDropKick: 1.3, gkRoll: 1.2, gkPlace: 1.3 };
+export const PLAY_SPEED = { slide: 1.25, trip: 1.4, getUp: 1.8, header: 1, bicycle: 1, knee: 1, poke: 1.4, dragR: 1.3, dragL: 1.3, gkDiveL: 1.3, gkDiveR: 1.3, gkBlockL: 1.3, gkBlockL2: 1.3, gkBlockR: 1.3, gkThrow: 1.2, gkDropKick: 1.3, gkRoll: 1.2, gkPlace: 1.3, throwIn: 1.3 };
 // Seconds to play of moves that go on longer than the game needs (just the drag, not the whole
 // trick; the trip until he hits the grass, then getUp takes over)
-export const PLAY_FOR = { dragR: 0.75, dragL: 0.75, trip: 0.75 };
+export const PLAY_FOR = { dragR: 0.75, dragL: 0.75, trip: 0.75, throwIn: 1.0 };
 // Metres per second each running animation was recorded at (measured on the model)
 export const ANIM_SPEED = { jog: 2.42, run: 5.29, sprint: 5.77, strafeL: 2.8, strafeR: 2.26, backpedal: 2.24, cutL: 2.56, cutR: 2.7, gkStepL: 2.2, gkStepR: 2.9 };
 

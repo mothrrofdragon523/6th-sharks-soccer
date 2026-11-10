@@ -11,6 +11,18 @@ export const CROSSBAR = 48;
 // except to get a loose ball that's in there (see keepOutOfBoxes).
 export const BOX = { depth: 150, half: 170 };
 const BOX_EXIT_SPEED = 170;   // how fast a player who shouldn't be in the box is walked back out
+// Out of play. The ball is out once the whole of it is over a line. It rolls on across the
+// run-off grass to the ad boards, the whistle goes, and after a short pause the team that didn't
+// touch it last restarts: a throw-in from the side; from the end, a goal kick if the attackers
+// put it out, or a corner if the defenders did (see ballOut).
+// How far past each line a dead ball rolls before the ad boards stop it. The view puts the boards
+// close behind the far touchline (14 units), further back at the ends (52), and has no boards on
+// the near side, only a strip of grass (60), so each side has its own limit.
+export const RUN_OFF = { far: 10, near: 54, end: 46 };
+const OVER_LINE = 6;          // a player can step this far over a line (0.3 m), enough to run the ball out
+const OUT_PAUSE = 0.8;        // seconds from the ball going out to the restart being set up
+const RESTART_ROOM = { throwIn: 50, corner: 120 }; // how far back the other team has to stand (2.5 m, 6 m)
+const THROW_REACH = 380;      // a throw-in goes to a teammate within 19 m
 export const PLAYER_R = 18;
 export const BALL_R = 9;
 const BODY_GAP = 22;           // two players' middles can't get closer than this (1.1 m, shoulder to shoulder)
@@ -52,7 +64,7 @@ const INTERCEPT_R = 22;               // how near an opponent a firm pass (12–
 const FIRST_TOUCH_TIME = 0.3;        // ...and he lets it run that way this long before gathering it
 const KEEPER_SPEED = 140;
 // How long after starting each keeper move the ball leaves him (matches the animations)
-const KEEPER_RELEASE = { throw: 0.58, dropKick: 0.92, roll: 0.75 };
+const KEEPER_RELEASE = { throw: 0.58, dropKick: 0.92, roll: 0.75, throwIn: 0.6 };
 const GOAL_KICK_SETUP = 1.4; // time to put the ball down for a goal kick
 const TRICK_SPEED = 240;    // a quick burst, faster than sprinting (12 m/s)
 const TRICK_TIME = 0.45;    // ...for about 5 metres
@@ -234,12 +246,14 @@ export class Match {
           lockUntil: 0, leapAt: -10, dragUntil: 0, dragAngle: 0, ballPull: 0, ballAngle: 0, ballReach: 1,
           onBall: null, onBallUntil: 0, slideAt: 0, slideUntil: 0, slideDir: 0, slideDone: false, tripAt: 0, tripUntil: 0, tripDir: 0, gotUp: true,
           boxPen: 0, // how far into a goalie box he's been let (see keepOutOfBoxes)
+          setPiece: null, setFace: 0, // taking a 'throwIn' or 'corner', and which way he faces to take it
         };
         this.players.push(p);
         this.teams.get(team).push(p);
       }
     }
-    this.ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, owner: null, lastTouch: null, passTarget: null, passUntil: 0 };
+    this.ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, owner: null, lastTouch: null, passTarget: null, passUntil: 0, dead: false };
+    this.restart = null;   // the throw-in, corner or goal kick that's about to be set up (see ballOut)
 
     this.trickShot = null; // Gabe's trick shot while it's being played out
     this.timeScale = 1;    // below 1 for slow motion
@@ -296,6 +310,7 @@ export class Match {
       p.stamina = Math.min(1, p.stamina + 0.3); // a breather after each goal
       p.sprinting = false;
       p.boxPen = 0;
+      p.setPiece = null;
     }
     const kicker = this.teams.get(team).find(p => p.role === 'fw');
     kicker.x = -team.dir * FOOT; // the ball on the spot at his feet
@@ -303,6 +318,8 @@ export class Match {
 
     const b = this.ball;
     b.vx = 0; b.vy = 0; b.vz = 0; b.z = 0;
+    b.dead = false;
+    this.restart = null;
     this.setOwner(kicker);
     this.atFeet(kicker);
     for (const c of this.pilots.values()) {
@@ -414,10 +431,17 @@ export class Match {
     return !!c && this.ball.owner === c.controlled;
   }
 
-  // A person's keeper holding the ball and waiting to be told how to put it back in play
+  // Does o have the ball to himself: a keeper with it in his hands, or a player taking a throw-in
+  // or corner? Nobody can tackle him, and he plays it to a teammate rather than running with it.
+  holding(o) {
+    return o.role === 'gk' || !!o.setPiece;
+  }
+
+  // A person's keeper (or their player taking a throw-in or corner) holding the ball and waiting
+  // to be told how to put it back in play
   pilotsKeeper(team) {
     const o = this.ball.owner;
-    return this.state === 'play' && o && o.role === 'gk' && o.team === team && this.pilots.has(team) && !o.release ? o : null;
+    return this.state === 'play' && o && this.holding(o) && o.team === team && this.pilots.has(team) && !o.release ? o : null;
   }
 
   power(team) {
@@ -621,7 +645,10 @@ export class Match {
   // Pass = throw, Shoot = drop kick, Sprint = roll it out. On a goal kick: Pass = short, Shoot = long.
   humanKeeper(c, gk, key) {
     if (this.t < gk.holdUntil || !c.keeperAim) return; // still gathering the ball
-    const type = gk.goalKick ? { a: 'goalPass', b: 'goalKick' }[key] : { a: 'throw', b: 'dropKick', s: 'roll' }[key];
+    // A throw-in: Pass = throw it. A corner: Pass = short along the ground, Shoot = cross it high.
+    const type = gk.setPiece === 'throwIn' ? { a: 'throwIn' }[key]
+      : gk.setPiece === 'corner' ? { a: 'cornerShort', b: 'cornerCross' }[key]
+      : gk.goalKick ? { a: 'goalPass', b: 'goalKick' }[key] : { a: 'throw', b: 'dropKick', s: 'roll' }[key];
     if (type) this.keeperDistribute(gk, c.keeperAim, type);
   }
 
@@ -703,15 +730,15 @@ export class Match {
 
   humanTackle(c) {
     const me = c.controlled;
-    if (this.t < me.tackleReadyAt) return;
+    if (this.t < me.tackleReadyAt || this.ball.dead) return;
     me.tackleReadyAt = this.t + 0.55;
     const o = this.ball.owner;
-    if (o && o.team !== me.team && o.role !== 'gk' && dist(me, this.ball) < POKE_RANGE) {
+    if (o && o.team !== me.team && !this.holding(o) && dist(me, this.ball) < POKE_RANGE) {
       this.startPoke(me);
       return;
     }
     // A few metres off the ball (theirs, or loose): go to ground and slide in for it
-    if ((!o || (o.team !== me.team && o.role !== 'gk')) && dist(me, this.ball) < SLIDE_R) {
+    if ((!o || (o.team !== me.team && !this.holding(o))) && dist(me, this.ball) < SLIDE_R) {
       this.slide(me);
       return;
     }
@@ -740,7 +767,7 @@ export class Match {
     const b = this.ball, o = b.owner;
     for (const p of this.players) {
       if (this.t >= p.pokeUntil || this.t < p.pokeAt + POKE_FOOT_AT) continue;
-      if (!o || o.team === p.team || o.role === 'gk') { p.pokeUntil = 0; continue; }
+      if (!o || o.team === p.team || this.holding(o)) { p.pokeUntil = 0; continue; }
       if (dist(p, b) > POKE_REACH) continue;
       p.pokeUntil = 0;
       p.lungeUntil = this.t;
@@ -778,6 +805,7 @@ export class Match {
     b.scripted = false;
     b.lastTouch = p;
     b.passTarget = null;
+    p.setPiece = null;
     if (p.role !== 'gk') { // he traps it, then dribbles it from there
       b.vx = p.vx; b.vy = p.vy;
       p.ballAngle = Math.atan2(b.y - p.y, b.x - p.x);
@@ -805,11 +833,12 @@ export class Match {
     return Math.hypot(p.vx, p.vy) > 80 ? 'catchLeap' : 'catchHigh';
   }
 
-  // While a keeper has the ball, each player on the other team picks someone to mark, closest pairs first.
+  // While a keeper has the ball (or a player is taking a throw-in or corner), each player on
+  // the other team picks someone to mark, closest pairs first.
   assignMarks(gk) {
     this.marks = new Map();
     const markers = this.teams.get(gk.team === HOME ? AWAY : HOME).filter(p => p.role !== 'gk');
-    const men = this.teams.get(gk.team).filter(p => p.role !== 'gk');
+    const men = this.teams.get(gk.team).filter(p => p.role !== 'gk' && p !== gk);
     const pairs = [];
     for (const m of markers) for (const man of men) pairs.push([dist(m, man), m, man]);
     pairs.sort((a, c) => a[0] - c[0]);
@@ -823,7 +852,8 @@ export class Match {
   keeperDistribute(p, mate, type) {
     p.release = { type, mate };
     p.releaseAt = this.t + (KEEPER_RELEASE[type] ?? 0);
-    if (!p.goalKick) p.gkAct = { type, at: this.t }; // goal kicks use an ordinary kick
+    if (type === 'throwIn') { p.kickAt = this.t; p.kickType = 'throwIn'; } // up over his head and away
+    else if (p.role === 'gk' && !p.goalKick) p.gkAct = { type, at: this.t }; // goal kicks and corners use an ordinary kick
   }
 
   releaseBall(p) {
@@ -833,21 +863,27 @@ export class Match {
     const b = this.ball;
     const tx = mate.x + mate.vx * 0.6, ty = mate.y + mate.vy * 0.6;
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
-    if (type === 'roll' || type === 'goalPass') {
+    if (type === 'roll' || type === 'goalPass' || type === 'cornerShort') {
       this.kick(p, dx, dy, clamp(d * 0.55 + 110, 200, 480));
+    } else if (type === 'throwIn') {
+      // From behind his head (1.6 m up), dropping at the teammate's feet (a throw doesn't go as far as a kick)
+      const speed = clamp(d * 0.6 + 160, 220, 400), T = d / speed;
+      this.kick(p, dx, dy, speed, (0.5 * GRAVITY * T * T - 32) / T);
+      b.z = 32;
     } else if (type === 'throw') {
       // From head height, landing at the teammate's feet
       const speed = clamp(d * 0.6 + 200, 260, 480), T = d / speed;
       this.kick(p, dx, dy, speed, (0.5 * GRAVITY * T * T - 40) / T);
       b.z = 40;
     } else {
-      // Drop kick or long goal kick: high and far, and not quite as accurate
+      // Drop kick, long goal kick or a corner crossed in: high and far, and not quite as accurate
       const a = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.12;
       const speed = clamp(d * 0.45 + 300, 380, 600), T = d * 0.8 / speed;
       this.kick(p, Math.cos(a), Math.sin(a), speed, 0.5 * GRAVITY * T);
       if (type === 'dropKick') b.z = 14;
     }
-    if (!type.startsWith('goal')) p.kickType = 'release'; // his own move is already playing
+    if (['throw', 'dropKick', 'roll', 'throwIn'].includes(type)) p.kickType = 'release'; // his own move is already playing
+    p.setPiece = null;
     b.passTarget = mate;
     b.passUntil = this.t + 2.5;
   }
@@ -857,9 +893,10 @@ export class Match {
     b.owner = null;
     b.lastTouch = p;
     p.onBall = null;
-    if (p.role === 'gk') { // out of his hands (anyone else kicks it from where it is, at his feet)
-      b.x = p.x + n.x * (PLAYER_R + BALL_R + 2);
-      b.y = p.y + n.y * (PLAYER_R + BALL_R + 2);
+    if (p.role === 'gk' || p.setPiece === 'throwIn') { // out of his hands (anyone else kicks it from where it is, at his feet)
+      const out = p.role === 'gk' ? PLAYER_R + BALL_R + 2 : 8; // (a throw-in is let go just in front of him)
+      b.x = p.x + n.x * out;
+      b.y = p.y + n.y * out;
     }
     b.vx = n.x * speed;
     b.vy = n.y * speed;
@@ -970,7 +1007,7 @@ export class Match {
         return Math.hypot(q.x - p.x - dx * along, q.y - p.y - dy * along);
       };
       const o = b.owner;
-      if (o && o.team !== p.team && o.role !== 'gk') {
+      if (o && o.team !== p.team && !this.holding(o)) {
         const hitsMan = toLeg(o) < SLIDE_MAN;
         if (toLeg(b) >= SLIDE_BALL && !hitsMan) continue;
         p.slideDone = true;
@@ -980,7 +1017,7 @@ export class Match {
           this.clearBall(p);
           if (hitsMan) this.trip(o); else { o.noTouchUntil = this.t + 0.4; o.stunUntil = this.t + 0.3; }
         }
-      } else if (!o && !b.scripted && b.z < 15 && toLeg(b) < SLIDE_BALL) {
+      } else if (!o && !b.scripted && !b.dead && b.z < 15 && toLeg(b) < SLIDE_BALL) {
         p.slideDone = true;
         this.clearBall(p);
       }
@@ -1069,10 +1106,13 @@ export class Match {
     p.noTouchUntil = this.t + 0.3;
   }
 
-  pickPassTarget(p, dir) {
+  // reach: only teammates this close (if there are none, whoever's nearest)
+  pickPassTarget(p, dir, reach = Infinity) {
     let best = null, bs = -Infinity;
-    for (const m of this.teams.get(p.team)) {
-      if (m === p) continue;
+    const mates = this.teams.get(p.team).filter(m => m !== p);
+    const near = mates.filter(m => dist(p, m) <= reach);
+    if (!near.length) return mates.reduce((a, m) => (dist(p, m) < dist(p, a) ? m : a));
+    for (const m of near) {
       const to = norm(m.x - p.x, m.y - p.y);
       let s = (to.x * dir.x + to.y * dir.y) * 1.5
         + this.openness(m) / 200
@@ -1142,12 +1182,26 @@ export class Match {
       return this.t < p.diveMoveUntil ? { vx: 0, vy: p.diveDir * p.diveSpeed } : { vx: 0, vy: 0 };
     }
     // Come out for a slow loose ball in the box.
-    if (!b.owner && Math.abs(b.x - gx) < 130 && Math.abs(b.y) < 160 && Math.hypot(b.vx, b.vy) < 380) {
+    if (!b.owner && !b.dead && Math.abs(b.x - gx) < 130 && Math.abs(b.y) < 160 && Math.hypot(b.vx, b.vy) < 380) {
       return this.seek(p, b.x, b.y, KEEPER_SPEED);
     }
     const out = Math.hypot(b.x - gx, b.y) < 350 ? 40 : 16;
     const ty = clamp(b.y * 0.5, -GOAL_HALF + 14, GOAL_HALF - 14);
     return this.seek(p, gx + dir * (PLAYER_R + out), ty, KEEPER_SPEED);
+  }
+
+  // The player taking a throw-in or corner. Once he's set (and, if a person is playing his team,
+  // once they've had time to choose) he plays it to a teammate: a throw to someone close by; a
+  // corner short along the ground or, to someone further off, crossed in high.
+  takeSetPiece(p) {
+    if (p.release) {
+      if (this.t >= p.releaseAt) this.releaseBall(p);
+    } else if (this.t >= p.holdUntil + (this.pilots.has(p.team) ? KEEPER_WAIT : 0.8)) {
+      const throwIn = p.setPiece === 'throwIn';
+      const m = this.pickPassTarget(p, { x: p.fx, y: p.fy }, throwIn ? THROW_REACH : Infinity);
+      this.keeperDistribute(p, m, throwIn ? 'throwIn' : dist(p, m) < 320 ? 'cornerShort' : 'cornerCross');
+    }
+    return { vx: 0, vy: 0 };
   }
 
   // A shot coming at goal: dive (or go down sideways) to where it's heading,
@@ -1184,6 +1238,8 @@ export class Match {
 
   fieldAI(p) {
     const b = this.ball, team = p.team;
+    if (b.dead) return { vx: 0, vy: 0 }; // play's stopped: wait for the restart
+    if (b.owner === p && p.setPiece) return this.takeSetPiece(p);
     if (b.owner === p) return this.aiWithBall(p);
     if (!b.owner && b.passTarget === p && this.t < b.passUntil) {
       // Run on to where it's played; once there, open up to face it. Close in, go and meet it.
@@ -1194,14 +1250,22 @@ export class Match {
       }
       return this.seek(p, b.x + b.vx * 0.15, b.y + b.vy * 0.15, AI_SPEED * 1.1);
     }
-    const keeper = b.owner && b.owner.role === 'gk' ? b.owner : null;
+    const keeper = b.owner && this.holding(b.owner) ? b.owner : null; // (or whoever's taking a throw-in or corner)
     if (keeper && keeper.team !== team && this.marks && this.marks.has(p)) {
       // Stand in front of your man, between him and the keeper, to cut out a pass along the ground
       const man = this.marks.get(p);
       const toBall = norm(b.x - man.x, b.y - man.y);
       p.faceBall = true;
       const far = dist(p, man) > 150; // hurry back from upfield, then shuffle
-      return this.seek(p, man.x + toBall.x * 40, man.y + toBall.y * 40, AI_SPEED * (far ? 1.25 : 0.85));
+      // In front of his man to cut out a pass, except at a throw-in, where he stands off to the
+      // side of him so the throw usually finds its man
+      const gap = keeper.setPiece === 'throwIn' ? -30 : 40;
+      return this.seek(p, man.x + toBall.x * gap, man.y + toBall.y * gap, AI_SPEED * (far ? 1.25 : 0.85));
+    }
+    if (keeper && keeper.team === team && keeper.setPiece) {
+      // A throw-in or corner: get round the ball to give him someone to find
+      const [x, y] = this.supportSpot(p);
+      return this.seek(p, x, y, AI_SPEED * 0.9);
     }
     if (keeper && keeper.team === team) {
       // Spread out and keep moving to lose the markers
@@ -1216,7 +1280,7 @@ export class Match {
     }
     // Close to whoever has the ball: don't charge in, jockey him and wait to get a foot in
     const o = b.owner;
-    if (o && o.team !== team && o.role !== 'gk' && dist(p, o) < JOCKEY_R && this.nearestOutfield(team, o) === p) {
+    if (o && o.team !== team && !this.holding(o) && dist(p, o) < JOCKEY_R && this.nearestOutfield(team, o) === p) {
       const g = norm(ownGoalX(team) - o.x, -o.y);
       p.faceBall = true;
       return this.seek(p, o.x + g.x * JOCKEY_GAP, o.y + g.y * JOCKEY_GAP, AI_SPEED);
@@ -1327,7 +1391,7 @@ export class Match {
 
   aiTackles(dt) {
     const o = this.ball.owner;
-    if (!o || o.role === 'gk' || this.t < o.trickUntil || this.t < o.spinUntil) return; // can't get a foot in mid-trick
+    if (!o || this.holding(o) || this.t < o.trickUntil || this.t < o.spinUntil) return; // can't get a foot in mid-trick
     for (const p of this.players) {
       if (this.isControlled(p) || p.team === o.team || p.role === 'gk' || this.down(p)) continue;
       // The one closing him down, a few metres off: now and then he slides in
@@ -1351,7 +1415,9 @@ export class Match {
     // While a person's keeper has the ball, their joystick picks who it goes to.
     for (const c of this.pilots.values()) {
       c.keeper = this.pilotsKeeper(c.team);
-      c.keeperAim = c.keeper ? this.pickPassTarget(c.keeper, c.move.mag > 0.2 ? c.move : { x: c.team.dir, y: 0 }) : null;
+      const k = c.keeper; // (a throw-in or corner is aimed into the pitch unless the joystick says otherwise)
+      c.keeperAim = k ? this.pickPassTarget(k, c.move.mag > 0.2 ? c.move : k.setPiece ? { x: Math.cos(k.setFace), y: Math.sin(k.setFace) } : { x: c.team.dir, y: 0 },
+        k.setPiece === 'throwIn' ? THROW_REACH : Infinity) : null;
     }
     for (const p of this.players) {
       let d;
@@ -1360,7 +1426,8 @@ export class Match {
       // A pass on its way to the player you're steering: he moves on to it himself, and your
       // joystick says where his first touch takes it
       const b = this.ball, receiving = !b.owner && b.passTarget === p && this.t < b.passUntil;
-      const steering = !!c && p === c.controlled && !c.keeper && !receiving;
+      const taking = !!p.setPiece && b.owner === p; // taking a throw-in or corner: he stands still until it's played
+      const steering = !!c && p === c.controlled && !c.keeper && !receiving && !taking;
       const move = steering ? c.move : null;
       const wasSprinting = p.sprinting;
       p.sprinting = steering && c.held.s && move.mag > 0.1 && !p.exhausted;
@@ -1424,8 +1491,10 @@ export class Match {
         p.vx += (d.vx - p.vx) * k;
         p.vy += (d.vy - p.vy) * k;
       }
-      p.x = clamp(p.x + p.vx * dt, F.left + PLAYER_R, F.right - PLAYER_R);
-      p.y = clamp(p.y + p.vy * dt, F.top + PLAYER_R, F.bottom - PLAYER_R);
+      // Outfield players can step just over the lines (and take the ball out with them); keepers can't
+      const over = p.role === 'gk' ? -PLAYER_R : OVER_LINE;
+      p.x = clamp(p.x + p.vx * dt, F.left - over, F.right + over);
+      p.y = clamp(p.y + p.vy * dt, F.top - over, F.bottom + over);
       if (p.role === 'gk') {
         p.x = p.team.dir === 1 ? Math.min(p.x, F.left + 140) : Math.max(p.x, F.right - 140);
         p.y = clamp(p.y, -170, 170);
@@ -1446,10 +1515,10 @@ export class Match {
         // On the move he faces where he's actually going (planting to turn back, he still faces forward)
         target = Math.hypot(p.vx, p.vy) > 60 ? Math.atan2(p.vy, p.vx) : Math.atan2(move.y, move.x);
       }
-      else if (p.role === 'gk' && this.ball.owner === p) {
+      else if (this.holding(p) && this.ball.owner === p) {
         // Turn to whoever it's going to
         const to = p.release ? p.release.mate : c && p === c.keeper ? c.keeperAim : null;
-        target = to ? facePoint(to) : p.team.dir === 1 ? 0 : Math.PI;
+        target = to ? facePoint(to) : p.setPiece ? p.setFace : p.team.dir === 1 ? 0 : Math.PI;
       } else if (p.role === 'gk' && this.t < p.diveUntil) target = null; // no turning mid-dive
       else if (p.role === 'gk' || p.faceBall) target = facePoint(this.ball); // shuffle, watching the ball
       else if (Math.hypot(p.vx, p.vy) > 30) target = Math.atan2(p.vy, p.vx);
@@ -1475,15 +1544,34 @@ export class Match {
         }
       }
     }
+    this.giveRoom(dt);
     this.keepOutOfBoxes(dt);
   }
 
+  // At a throw-in or corner the other team has to stand back from the player taking it
+  giveRoom(dt) {
+    const o = this.ball.owner;
+    if (!o || !o.setPiece) return;
+    const room = RESTART_ROOM[o.setPiece];
+    for (const p of this.players) {
+      if (p.team === o.team) continue;
+      const dx = p.x - o.x, dy = p.y - o.y, d = Math.hypot(dx, dy);
+      if (d >= room) continue;
+      const n = d > 0.01 ? { x: dx / d, y: dy / d } : { x: Math.cos(o.setFace), y: Math.sin(o.setFace) };
+      const push = Math.min(room - d, 400 * dt); // moved back briskly rather than in one jump
+      p.x = clamp(p.x + n.x * push, F.left, F.right);
+      p.y = clamp(p.y + n.y * push, F.top, F.bottom);
+      const into = -(p.vx * n.x + p.vy * n.y);
+      if (into > 0) { p.vx += n.x * into; p.vy += n.y * into; }
+    }
+  }
+
   // Is there a loose ball in the goalie box at this end (side: -1 the left goal, 1 the right)
-  // for players to go in after? A save pushed away or a shot back off the boards counts. A ball
+  // for players to go in after? A save pushed away or a ball knocked loose in there counts. A ball
   // a keeper is holding doesn't, nor does a pass or one of Gabe's shots on its way through.
   looseInBox(side) {
     const b = this.ball;
-    return !b.owner && !b.scripted && !(b.passTarget && this.t < b.passUntil) && b.x * side > 0 && !!inBox(b);
+    return !b.owner && !b.scripted && !b.dead && !(b.passTarget && this.t < b.passUntil) && b.x * side > 0 && !!inBox(b);
   }
 
   // The goalie boxes belong to the keepers. Anyone else is stopped at the line, with the ball or
@@ -1572,14 +1660,6 @@ export class Match {
     b.y = o.y + Math.sin(o.ballAngle) * reach;
     b.z = 0; b.vz = 0;
     b.vx = o.vx; b.vy = o.vy;
-    // Up against the boards or the goal line it stays on the pitch
-    const cx = clamp(b.x, F.left + BALL_R, F.right - BALL_R), cy = clamp(b.y, F.top + BALL_R, F.bottom - BALL_R);
-    if (cx !== b.x || cy !== b.y) {
-      b.x = cx; b.y = cy;
-      o.ballAngle = Math.atan2(cy - o.y, cx - o.x);
-      o.ballReach = dist(o, b) / FOOT;
-    }
-
     if (o.onBall && (reach <= FOOT + ON_BALL_R + 1 || this.t >= o.onBallUntil)) { // he's on it: play the pass, shot or trick
       const act = o.onBall;
       o.onBall = null;
@@ -1612,10 +1692,11 @@ export class Match {
 
   updateBall(dt) {
     const b = this.ball, prev = { x: b.x, y: b.y, z: b.z };
-    if (b.owner && b.owner.role !== 'gk') {
+    const held = !!b.owner && this.holding(b.owner);
+    if (b.owner && !held) {
       this.carry(b.owner, dt);
     } else if (b.owner) {
-      // A keeper's is in his hands (the view draws it there)
+      // In a keeper's hands, held up for a throw-in, or on the spot for a corner (the view draws it there)
       const o = b.owner;
       b.x = o.x + o.fx * FOOT;
       b.y = o.y + o.fy * FOOT;
@@ -1624,6 +1705,7 @@ export class Match {
       b.z = 0; b.vz = 0;
       b.vx = o.vx;
       b.vy = o.vy;
+      return;
     } else {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -1642,34 +1724,86 @@ export class Match {
       }
     }
 
-    // The ball bounces off the boards (no throw-ins yet), except through the goal mouth.
-    if (b.y < F.top + BALL_R) { b.y = F.top + BALL_R; b.vy = Math.abs(b.vy) * 0.7; }
-    if (b.y > F.bottom - BALL_R) { b.y = F.bottom - BALL_R; b.vy = -Math.abs(b.vy) * 0.7; }
-    const inMouth = Math.abs(b.y) < GOAL_HALF - BALL_R;
-    if (b.scripted) this.woodwork(prev);
-    else if (!inMouth) { // (a scripted shot that misses goes on out for a goal kick)
-      if (b.x < F.left + BALL_R) { b.x = F.left + BALL_R; b.vx = Math.abs(b.vx) * 0.7; }
-      if (b.x > F.right - BALL_R) { b.x = F.right - BALL_R; b.vx = -Math.abs(b.vx) * 0.7; }
+    if (b.dead) {
+      // Already out of play: it runs on across the grass and stops against the ad boards
+      // (one that's up in the air carries on over them)
+      const ex = F.right + RUN_OFF.end, top = F.top - RUN_OFF.far, bottom = F.bottom + RUN_OFF.near;
+      // (it just stops dead there: a bounce would roll it back across the line)
+      if (b.z < 20 && Math.abs(b.x) > ex) { b.x = Math.sign(b.x) * ex; b.vx = 0; }
+      if (b.z < 20 && b.y < top) { b.y = top; b.vy = 0; }
+      if (b.z < 20 && b.y > bottom) { b.y = bottom; b.vy = 0; }
+      return;
     }
+    if (b.scripted) this.woodwork(prev);
 
-    // A shot that's meant to go in counts the moment it crosses the line between the posts. From
-    // close in at an angle it's going so far sideways that waiting for the whole ball to be over
-    // the line (below) would let it slip past the far post first, and a sure goal would miss.
-    const c = b.scripted && b.outcome === 'goal' && this.lineCrossing(prev);
-    if (c && Math.abs(c.y) < GOAL_HALF && c.z < CROSSBAR) {
+    // A goal: the ball crosses the line between the posts and under the bar. That's judged at the
+    // moment it crosses, because from close in at an angle it's going so far sideways that by the
+    // time the whole ball was over the line it would have slipped past the far post, and a sure
+    // goal would miss. A shot that's meant to miss never goes in, so what the dice decided is
+    // what he sees.
+    const c = this.lineCrossing(prev);
+    if (c && Math.abs(c.y) < GOAL_HALF && c.z < CROSSBAR && !(b.scripted && b.outcome !== 'goal')) {
       b.owner = null;
       this.goalScored(c.x === F.right ? HOME : AWAY);
       return;
     }
 
-    // Any other ball is in once all of it is over the line, between the posts and under the bar.
-    // A shot that's meant to miss never goes in, so what the dice decided is what he sees.
-    const under = b.z < CROSSBAR && Math.abs(b.y) < GOAL_HALF && !(b.scripted && b.outcome !== 'goal');
-    if (b.x < F.left - BALL_R) {
-      if (under) { b.owner = null; this.goalScored(AWAY); } else this.goalKick(HOME);
-    } else if (b.x > F.right + BALL_R) {
-      if (under) { b.owner = null; this.goalScored(HOME); } else this.goalKick(AWAY);
+    // Out of play: the whole ball over the goal line (and not in the goal) or over a touchline
+    if (Math.abs(b.x) > F.right + BALL_R) this.ballOut(true);
+    else if (Math.abs(b.y) > F.bottom + BALL_R) this.ballOut(false);
+  }
+
+  // The ball's gone out of play. Whoever touched it last loses it: off the side, it's a throw-in
+  // to the other team; off the end, a goal kick if the attackers put it out and a corner if the
+  // defenders did. Play stops for a moment (the ball runs on to the boards), then it's set up.
+  ballOut(overEnd) {
+    const b = this.ball, last = b.lastTouch ? b.lastTouch.team : null;
+    let r;
+    if (overEnd) {
+      const defenders = b.x > 0 ? AWAY : HOME; // whose goal line it went over
+      r = last === defenders
+        ? { type: 'corner', team: defenders === HOME ? AWAY : HOME, x: Math.sign(b.x), y: b.y < 0 ? -1 : 1 }
+        : { type: 'goalKick', team: defenders };
+    } else {
+      r = { type: 'throwIn', team: last === HOME ? AWAY : HOME, x: clamp(b.x, F.left + 60, F.right - 60), y: b.y < 0 ? -1 : 1 };
     }
+    if (b.owner) b.owner.onBall = null;
+    b.owner = null;
+    b.dead = true;
+    b.scripted = false;
+    b.passTarget = null;
+    r.at = this.t + OUT_PAUSE;
+    this.restart = r;
+    for (const c of this.pilots.values()) c.charging = false;
+    if (r.type !== 'goalKick') this.showToast(`${r.type === 'corner' ? 'CORNER KICK' : 'THROW-IN'}: ${r.team.name}`, 2);
+  }
+
+  // Set up the throw-in, corner or goal kick. For a throw-in or corner the nearest player on that
+  // team takes it: on the touchline with the ball in his hands, or behind the ball in the corner.
+  // Like a keeper with the ball, he picks a teammate to play it to, and nobody can tackle him.
+  startRestart() {
+    const r = this.restart, b = this.ball;
+    this.restart = null;
+    b.dead = false;
+    b.vx = 0; b.vy = 0; b.vz = 0; b.z = 0;
+    if (r.type === 'goalKick') { this.goalKick(r.team); return; }
+    // Where the ball goes, and which way he faces: into the pitch (from a corner, a little toward the goal)
+    const corner = r.type === 'corner';
+    const spot = corner ? { x: r.x * (F.right - 8), y: r.y * (F.bottom - 8) } : { x: r.x, y: r.y * (F.bottom - 4) };
+    const face = Math.atan2(-r.y, corner ? -r.x * 0.35 : 0);
+    const taker = this.nearestOutfield(r.team, spot) || this.teams.get(r.team).find(p => p.role !== 'gk');
+    Object.assign(taker, {
+      vx: 0, vy: 0, angle: face, fx: Math.cos(face), fy: Math.sin(face), setFace: face, sprinting: false, boxPen: 0,
+      stunUntil: 0, slideUntil: 0, tripUntil: 0, lockUntil: 0, trickUntil: 0, spinUntil: 0, pokeUntil: 0, lungeUntil: 0, dragUntil: 0,
+    });
+    taker.x = spot.x - taker.fx * FOOT;
+    taker.y = spot.y - taker.fy * FOOT;
+    b.x = spot.x; b.y = spot.y;
+    this.setOwner(taker);
+    taker.setPiece = r.type;
+    taker.release = null;
+    taker.holdUntil = this.t + 0.9; // a moment to get set (and for the other team to back off)
+    this.assignMarks(taker);
   }
 
   updateBallInNet(dt) {
@@ -1689,7 +1823,7 @@ export class Match {
 
   checkPossession() {
     const b = this.ball;
-    if (b.owner || b.scripted) return;
+    if (b.owner || b.scripted || b.dead) return;
     const speed = Math.hypot(b.vx, b.vy);
     let best = null, bd = Infinity;
     for (const p of this.players) {
@@ -1743,6 +1877,7 @@ export class Match {
     if (this.state === 'goal' && this.t >= this.stateUntil) this.kickoff(this.concededBy);
 
     if (this.state === 'play') {
+      if (this.restart && this.t >= this.restart.at) this.startRestart();
       for (const c of this.pilots.values()) {
         if (c.charging && !this.attacking(c.team)) c.charging = false;
         if (!this.trickShot) this.autoSwitch(c);

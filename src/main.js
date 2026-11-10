@@ -1070,7 +1070,11 @@ function updateHud() {
   // and become the keeper's choices while your keeper has the ball
   const attack = match.attacking(myTeam);
   const keeper = match.pilotsKeeper(myTeam);
-  if (keeper && keeper.goalKick) {
+  if (keeper && keeper.setPiece === 'throwIn') { // taking a throw-in: just the throw
+    setText(hud.a, 'THROW'); setText(hud.b, ''); setText(hud.s, '');
+  } else if (keeper && keeper.setPiece) { // taking a corner: along the ground or crossed in
+    setText(hud.a, 'SHORT'); setText(hud.b, 'CROSS'); setText(hud.s, '');
+  } else if (keeper && keeper.goalKick) {
     setText(hud.a, 'SHORT'); setText(hud.b, 'LONG'); setText(hud.s, '');
   } else if (keeper) {
     setText(hud.a, 'THROW'); setText(hud.b, 'KICK'); setText(hud.s, 'ROLL');
@@ -1085,9 +1089,9 @@ function updateHud() {
   const shooting = attack && !keeper;
   const me = pilot.controlled;
   const zone = shooting && match.canShoot(me) ? shotLevel(Math.round(match.shotDistance(me))) : null;
-  hud.b.classList.toggle('off', shooting && !zone);
+  hud.b.classList.toggle('off', (shooting && !zone) || (keeper && keeper.setPiece === 'throwIn'));
   for (const lvl of ['easy', 'medium', 'hard']) hud.b.classList.toggle(`zone-${lvl}`, zone === lvl);
-  hud.s.classList.toggle('off', !!(keeper && keeper.goalKick));
+  hud.s.classList.toggle('off', !!(keeper && (keeper.goalKick || keeper.setPiece)));
   hud.t.classList.toggle('off', !!keeper);
   hud.t.classList.toggle('tired', !keeper && match.t < me.trickReadyAt);
 

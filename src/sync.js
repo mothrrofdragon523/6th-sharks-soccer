@@ -8,7 +8,7 @@ const DELAY = 110;                // ms the joining device plays behind the host
 
 // Player fields copied as they are (positions and facing are blended separately)
 const FIELDS = ['kickAt', 'kickType', 'gkAct', 'trickUntil', 'trickSide', 'faceBall', 'sprinting', 'leapAt',
-  'goalKick', 'stamina', 'exhausted', 'trickReadyAt', 'ballReach', 'diveUntil'];
+  'goalKick', 'stamina', 'exhausted', 'trickReadyAt', 'ballReach', 'diveUntil', 'setPiece', 'setFace'];
 
 const BALL_REACH = FIELDS.indexOf('ballReach');
 
@@ -28,7 +28,7 @@ export function snapshot(m, at) {
     timeScale: m.timeScale, trick: !!m.trickShot,
     shot: shot && { team: side(shot.team), distance: shot.distance },
     pilots: [...m.pilots.values()].map(c => [side(c.team), idx(c.controlled), idx(c.keeperAim), c.charging, r3(c.chargeStart)]),
-    ball: [r1(b.x), r1(b.y), r1(b.z), r1(b.vx), r1(b.vy), idx(b.owner), b.style || null, !!b.scripted, b.hitWood || 0],
+    ball: [r1(b.x), r1(b.y), r1(b.z), r1(b.vx), r1(b.vy), idx(b.owner), b.style || null, !!b.scripted, b.hitWood || 0, !!b.dead],
     players: m.players.map(p => [r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), r3(p.angle), r3(p.ballAngle), !!p.release,
       ...FIELDS.map(f => (typeof p[f] === 'number' ? r3(p[f]) : p[f] ?? null))]),
   };
@@ -108,6 +108,7 @@ export class Mirror {
     ball.style = ba[6];
     ball.scripted = ba[7];
     ball.hitWood = ba[8] || false;
+    ball.dead = !!ba[9]; // out of play, waiting for the throw-in, corner or goal kick
     return true;
   }
 }

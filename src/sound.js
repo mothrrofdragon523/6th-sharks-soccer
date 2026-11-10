@@ -564,6 +564,7 @@ export class SoundCues {
       this.play('clang');
       this.play('ooh', 1, 0.12);
     }
+    if (m.ball.dead && !this.dead) this.play('whistle'); // the ball's gone out: the referee stops play
     this.watchScore(myTeam);
     this.watchState(myTeam);
     this.remember();
@@ -682,6 +683,7 @@ export class SoundCues {
   remember() {
     const { m } = this, b = m.ball;
     this.state = m.state;
+    this.dead = !!b.dead;
     this.score = { home: m.score.home, away: m.score.away };
     this.trick = !!m.trickShot;
     this.owner = b.owner;

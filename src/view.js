@@ -199,7 +199,9 @@ export class View {
     }
 
     if (t >= v.busyUntil) {
-      if (gk && m.ball.owner === p) {
+      if (m.ball.owner === p && p.setPiece) {
+        this.fadeTo(v, p.setPiece === 'throwIn' ? 'gkHold' : 'idle', 0.3); // a throw-in's in his hands, a corner's on the grass
+      } else if (gk && m.ball.owner === p) {
         this.fadeTo(v, p.goalKick ? 'gkIdle' : 'gkHold', 0.3); // a goal kick's ball is on the grass
       } else if (speed > 0.6) {
         // Split the movement into forwards and sideways (+ = towards his left)
@@ -854,6 +856,11 @@ export class View {
       bx = o.x * S + o.fx * 0.35;
       bz = o.y * S + o.fy * 0.35;
       by = 1.1;
+    } else if (b.owner && b.owner.setPiece) {
+      // Taking a throw-in the ball is in his hands; at a corner it sits on the grass where the sim has it
+      const hands = b.owner.setPiece === 'throwIn' && this.keeperBall(b.owner);
+      if (hands) { bx = hands.x; by = hands.y; bz = hands.z; }
+      this.ballOff = null;
     } else if (b.owner && this.playerViews[0].model) {
       // Realistic players dribble with the ball close to their feet (sim.js works out which side)
       const o = b.owner, a = o.ballAngle, r = FOOT * S * o.ballReach, out = this.footTouch(o, a, r, dt);
@@ -895,8 +902,10 @@ export class View {
 
     // Camera: high up in the near stand like FC Mobile's broadcast view, following the ball
     const follow = Math.min(1, dt * 2);
-    const tx = THREE.MathUtils.clamp(bx, -FIELD_W / 2 + 18, FIELD_W / 2 - 18);
-    const tz = THREE.MathUtils.clamp(bz * 0.4, -FIELD_H / 2 + 14, FIELD_H / 2 - 12);
+    // (for a throw-in or corner it goes right out to the edge of the pitch, so the taker is in view)
+    const restart = b.dead || !!(b.owner && b.owner.setPiece);
+    const tx = THREE.MathUtils.clamp(bx, -FIELD_W / 2 + (restart ? 3 : 18), FIELD_W / 2 - (restart ? 3 : 18));
+    const tz = THREE.MathUtils.clamp(bz * (restart ? 0.75 : 0.4), -FIELD_H / 2 + (restart ? 3 : 14), FIELD_H / 2 - (restart ? 1 : 12));
     this.camX += (tx - this.camX) * follow;
     this.camZ += (tz - this.camZ) * follow;
     // A shudder when a shot rattles the woodwork
