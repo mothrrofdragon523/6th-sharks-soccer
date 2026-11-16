@@ -404,6 +404,27 @@
       color: #fff; background: #26a69a; border: none; border-radius: 12px; cursor: pointer;
     }
     .notebook-done:disabled { opacity: 0.5; cursor: default; }
+    /* Vocabulary review: sentences with blanks to fill from a word bank */
+    #quiz.blanks #quiz-choices { display: flex; flex-direction: column; align-items: stretch; gap: clamp(6px, 1.5vmin, 10px); }
+    #quiz.blanks .blanks-check { align-self: center; }
+    .blank-row { margin: 0; font: clamp(13px, 3.4vmin, 18px)/1.9 Arial, sans-serif; }
+    .blank-slot {
+      min-width: 9ch; padding: 1px 10px; margin: 0 4px;
+      font: bold clamp(13px, 3.4vmin, 18px) Arial, sans-serif; color: #004c54;
+      background: #f5fafa; border: none; border-bottom: 3px solid #90a4ae; border-radius: 6px 6px 0 0; cursor: pointer;
+    }
+    .blank-slot.picked { background: #e0f2f1; border-bottom-color: #00897b; }
+    .blank-slot.right { color: #2e7d32; border-bottom-color: #2e7d32; background: #e8f5e9; }
+    .blank-slot.wrong { color: #c62828; border-bottom-color: #c62828; background: #ffebee; }
+    .word-bank { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; padding: 6px 10px; border: 2px dashed #90a4ae; border-radius: 10px; }
+    .bank-label { font: bold clamp(11px, 2.8vmin, 14px) Arial, sans-serif; color: #607d8b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .bank-word {
+      padding: clamp(6px, 1.6vmin, 9px) clamp(10px, 2.6vmin, 16px);
+      font: bold clamp(13px, 3.4vmin, 18px) Arial, sans-serif; color: #004c54;
+      background: #fff; border: 2px solid #004c54; border-radius: 10px; cursor: pointer;
+    }
+    .bank-word.used { opacity: 0.45; }
+    .bank-word:disabled { cursor: default; }
     /* Online: watching Gabe answer on his own device (nothing here can be tapped) */
     #quiz.watching .quiz-card { border-top-color: #fdd835; }
     #quiz.watching .choice:disabled { opacity: 1; cursor: default; }

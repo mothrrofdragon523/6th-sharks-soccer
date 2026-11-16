@@ -195,12 +195,20 @@ export class QuestionDeck {
     this.mode = mode;
     this.used = new Set();
     this.groups = new Set(); // groups already asked this game
+    this.opened = false;
   }
 
   // Returns { q, skill, choices, answer (index into choices), rightAnswer (its text),
   // typed, why, graph?, level }. Typed questions have no choices: he enters the answer.
   // level is 'easy', 'medium' or 'hard'.
   next(level) {
+    // Some sets open every game with the same fill-in-the-blank vocabulary review (mode.opener),
+    // then carry on with the usual questions. Its blanks and word bank come back as `blanks`.
+    if (this.mode.opener && !this.opened) {
+      this.opened = true;
+      const { q, skill, why, bank, parts } = this.mode.opener;
+      return { q, skill, choices: [], answer: -1, rightAnswer: parts.map(p => p.a).join(', '), typed: false, blanks: { bank, parts }, why, level };
+    }
     const pool = this.mode[level];
     const isFresh = item => !this.used.has(item) && !(item.group && this.groups.has(item.group));
     let fresh = pool.filter(isFresh);

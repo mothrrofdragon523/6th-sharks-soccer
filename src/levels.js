@@ -1,6 +1,7 @@
-// The options shown on the start menu (Preseason, Championship, Times Tables and Homework; the old Preseason is archived in archive.js), and which question set each one uses.
+// The options shown on the start menu (Preseason, Regular Season, Playoffs, Championship, Times Tables and Homework; the old Preseason is archived in archive.js), and which question set each one uses.
 // (The set names in questions.js differ from the menu names; they're matched here by topic.)
 import { FIFTH_GRADE_REVIEW, TIMES_TABLES } from './questions.js';
+import { MODULE_5, MODULE_6, MODULES_5_AND_6 } from './modules.js';
 import { HOMEWORK } from './homework.js';
 
 export const LEVELS = [
@@ -13,13 +14,29 @@ export const LEVELS = [
     questions: FIFTH_GRADE_REVIEW,
   },
   {
+    id: 'regular',
+    name: 'Regular Season',
+    icon: '📅',
+    color: '#42a5f5',
+    desc: 'Module 5 Review: unit rates, equivalent ratios, ratio tables and graphs, comparing numbers on the number line',
+    questions: MODULE_5,
+  },
+  {
+    id: 'playoffs',
+    name: 'Playoffs',
+    icon: '🔥',
+    color: '#ff9800',
+    desc: 'Module 6 Review: converting customary and metric units, comparing measurements, circle graphs, ratios',
+    questions: MODULE_6,
+  },
+  {
     id: 'championship',
     name: 'Championship',
     icon: '🏆',
     color: '#fdd835',
     desc: 'A 3 Game Championship Showdown',
-    // Best of 3, each game drawing on the Preseason (5th Grade Review) questions
-    series: [FIFTH_GRADE_REVIEW, FIFTH_GRADE_REVIEW, FIFTH_GRADE_REVIEW],
+    // Best of 3: Module 5, then Module 6, then both together
+    series: [MODULE_5, MODULE_6, MODULES_5_AND_6],
   },
   {
     id: 'times',
