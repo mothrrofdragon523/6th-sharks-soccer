@@ -389,6 +389,7 @@ showMenuStep();
 // ---------- Sound: the mute button, and a tap for every button ----------
 const soundBtn = $('sound-btn');
 const cues = new SoundCues(match);
+let seenAway = 0;                    // the Eagles' score last frame
 let seenHome = 0;                     // the Dragons' score last frame, to spot a goal
 
 function showSoundBtn() {
@@ -1193,9 +1194,11 @@ function frame(now) {
     updateHud();
     shareCard();
     cues.update(myTeam);
-    // The dragon's goal celebration, when the Dragons score (on the device that plays them)
-    if (match.score.home > seenHome && myTeam === HOME && match.state !== 'menu') celebrate();
+    // The goal celebration, on every device: the dragon when the Dragons score, the eagle when the Eagles do
+    if (match.score.home > seenHome && match.state !== 'menu') celebrate('dragon');
+    if (match.score.away > seenAway && match.state !== 'menu') celebrate('eagle');
     seenHome = match.score.home;
+    seenAway = match.score.away;
     if (debugBox) updateDebug(now);
   } catch (e) {
     showError(e);

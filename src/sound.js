@@ -36,6 +36,7 @@ const VOLUME = {
   // Crowd reactions
   roar: 0.95,    // your team scores
   dragon: 0.9,   // the dragon's roar in the goal celebration
+  eagle: 0.7,    // the eagle's screeches in the Eagles' goal celebration
   ooh: 0.8,      // so close! (a recording of a crowd gasping)
   groan: 0.6,    // the other team scores
   // Buttons, question cards and the end of a game
@@ -64,7 +65,7 @@ export const CHIME_TIME = 450;
 const PITCH_WOBBLE = 0.07; // kicks vary by up to this much (7%), so they don't sound like a machine
 const WOBBLY = new Set(['kick', 'pass', 'touch', 'header', 'bounce', 'boards', 'tackle', 'scuff', 'catch', 'save', 'pop']);
 const SHORTEST_GAP = 0.05; // the same sound can't play twice closer together than this (seconds)...
-const GAPS = { dragon: 3, ooh: 1.5, groan: 1.5, roar: 3, tackle: 0.12, scuff: 0.15, touch: 0.1, bounce: 0.08, boards: 0.1, slide: 0.2 }; // ...or these
+const GAPS = { dragon: 3, eagle: 3, ooh: 1.5, groan: 1.5, roar: 3, tackle: 0.12, scuff: 0.15, touch: 0.1, bounce: 0.08, boards: 0.1, slide: 0.2 }; // ...or these
 
 // What counts as what in the match (speeds in units a second; 20 units = 1 metre)
 const SAVE_PACE = 250;      // a keeper taking a ball faster than this has made a save
@@ -228,6 +229,16 @@ export function loudness(name, t) {
   return n ? Math.min(1, Math.sqrt(sum / n) * 3) : 0;
 }
 
+// The eagle's screeches in the Eagles' goal celebration: [when, how long] in seconds. (It's made up, so the
+// animation follows this timing: see eagleLoudness.)
+export const EAGLE_SCREECHES = [[0.3, 0.6], [1.0, 0.6], [1.7, 0.8]];
+export function eagleLoudness(t) {
+  for (const [at, len] of EAGLE_SCREECHES) {
+    if (t >= at && t < at + len) return Math.sin(Math.PI * (t - at) / len) ** 0.5 * (0.8 + 0.2 * Math.sin(t * 40));
+  }
+  return 0;
+}
+
 // A brass-band note
 function brass(a, at, hz, len) {
   for (const detune of [0.997, 1.003]) {
@@ -329,6 +340,16 @@ const SOUNDS = {
   roar: a => clip(a, 'roar', { len: 7, fade: 2.5 }) ?? swell(a, { sound: 'cheer', band: 'lowpass', q: 0.5, path: [[1500, 0], [4500, 0.4], [3800, 3.2], [1800, 5.4]], attack: 0.15, hold: 2.8, release: 2.6, level: 1.3 }),
   ooh: a => clip(a, 'gasp', { fade: 0.3 }) ?? swell(a, { q: 1.6, path: [[350, 0], [700, 0.35], [420, 1.3]], attack: 0.2, hold: 0.35, release: 0.85, level: 2.5 }), // (a narrow filter lets little through)
   dragon: a => clip(a, 'dragon', { fade: 0.1 }) ?? 0.01,
+  eagle(a) { // "kee-yaaah": a harsh, shrill cry that starts high and falls, with a fast tremble in it
+    for (const [at, len] of EAGLE_SCREECHES) {
+      for (const detune of [0.99, 1.01]) {
+        tone(a, { type: 'sawtooth', from: 3300 * detune, to: 1900 * detune, at, attack: 0.06, len: len - 0.06, level: 0.35, muffle: 5200 });
+      }
+      tone(a, { type: 'square', from: 1650, to: 950, at, attack: 0.06, len: len - 0.06, level: 0.15, muffle: 3000 });
+      hiss(a, { band: 'bandpass', from: 4200, to: 2600, q: 1.2, at, attack: 0.05, len: len - 0.05, level: 0.4 });
+    }
+    return EAGLE_SCREECHES[EAGLE_SCREECHES.length - 1][0] + 0.9;
+  },
   groan: a => clip(a, 'gasp', { fade: 0.4, rate: 0.82, level: 0.7 }) ?? swell(a, { q: 1.4, path: [[650, 0], [280, 1.4]], attack: 0.15, hold: 0.3, release: 1.1, level: 2.5 }),
   crowd: a => clip(a, 'bed', { len: 6, fade: 1 }) ?? swell(a, { sound: 'bed', band: 'lowpass', q: 0.5, path: [[6000, 0]], attack: 0.3, hold: 4, release: 0.5 }),
   tap(a) {

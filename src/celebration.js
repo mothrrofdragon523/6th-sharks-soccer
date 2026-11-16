@@ -1,18 +1,24 @@
 // The goal celebration: a cartoon dragon sweeps across the screen from left to right, roaring and
 // breathing fire, while soccer balls burst out from behind his head as he passes the middle.
 // Drawn on its own canvas, in the same style as the dragon on the shirts (see dragon.js).
+// When the Eagles score it's an eagle instead (see eagle.js): it swoops across from right to left,
+// screeching and shedding feathers, with the same burst of balls. (It's drawn mirrored, so everything
+// below works as if it were flying left to right.)
 import { paintDragon, mouthPoint } from './dragon.js';
-import { playSound, loudness } from './sound.js';
+import { paintEagle } from './eagle.js';
+import { playSound, loudness, eagleLoudness } from './sound.js';
 
 const SWEEP = 2.7;             // seconds for the head to cross the screen (about as long as the roar)
 const BURSTS = [-0.18, 0, 0.18]; // when the balls burst, in seconds from the head reaching the middle
 const BALLS_PER_BURST = 6;
 const FLAMES_PER_SECOND = 110; // at the loudest part of the roar
 const MAX_FLAMES = 260;
+const FEATHERS_PER_SECOND = 28; // the eagle's, while it screeches
+const MAX_FEATHERS = 90;
 
 let canvas = null, running = false;
 
-export function celebrate() {
+export function celebrate(team = 'dragon') {
   if (running) return;
   running = true;
   if (!canvas) {
@@ -23,11 +29,12 @@ export function celebrate() {
     document.body.insertBefore(canvas, banner || null);
   }
   canvas.hidden = false;
-  playSound('dragon');
+  const eagle = team === 'eagle';
+  playSound(eagle ? 'eagle' : 'dragon');
 
   const g = canvas.getContext('2d');
-  const flames = [], balls = [];
-  let start = 0, last = 0, jaw = 0, flameDebt = 0, nextBurst = 0;
+  const flames = [], balls = [], feathers = [];
+  let start = 0, last = 0, jaw = 0, flameDebt = 0, featherDebt = 0, nextBurst = 0;
 
   function frame(now) {
     if (!start) start = last = now;
@@ -36,7 +43,9 @@ export function celebrate() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const W = canvas.clientWidth * dpr, H = canvas.clientHeight * dpr;
     if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, W, H);
+    if (eagle) g.setTransform(-1, 0, 0, 1, W, 0); // (the eagle flies the other way)
 
     const S = Math.min(W * 0.42, H * 0.72), sc = S / 256;      // the head's size on screen
     const travel = W + S * 1.1, speed = travel / SWEEP;         // pixels a second
@@ -46,7 +55,7 @@ export function celebrate() {
     const hx = -S * 0.55 + travel * along, hy = H * 0.47 + Math.sin(t * 9) * S * 0.02;
 
     // The jaw and the fire follow how loud the roar is right now (a made-up pattern if it hasn't loaded)
-    const loud = loudness('dragon', t) ?? (t > 0.1 && t < SWEEP - 0.2 ? 0.5 + 0.4 * Math.sin(t * 13) : 0);
+    const loud = eagle ? eagleLoudness(t) : loudness('dragon', t) ?? (t > 0.1 && t < SWEEP - 0.2 ? 0.5 + 0.4 * Math.sin(t * 13) : 0);
     jaw += ((0.06 + 0.5 * loud) - jaw) * Math.min(1, dt * 16);
     const tilt = 0.14 * loud;                                    // throws his head back as he roars
     const [mx, my] = mouthPoint(jaw);
@@ -54,8 +63,22 @@ export function celebrate() {
     const lx = -(mx - 128) * sc, ly = (my - 128) * sc, ca = Math.cos(-tilt), sa = Math.sin(-tilt);
     const mouthX = hx + lx * ca - ly * sa, mouthY = hy + lx * sa + ly * ca;
 
+    // The eagle sheds feathers that trail away behind it as it screeches
+    if (eagle && t < SWEEP) featherDebt += FEATHERS_PER_SECOND * (0.25 + loud) * dt;
+    while (featherDebt >= 1 && feathers.length < MAX_FEATHERS) {
+      featherDebt--;
+      feathers.push({
+        x: hx + (Math.random() - 0.3) * S * 0.3, y: hy + (Math.random() - 0.3) * S * 0.45,
+        vx: speed * 0.35 - S * (0.1 + Math.random() * 0.6), vy: S * (Math.random() - 0.8) * 0.5,
+        size: S * (0.07 + Math.random() * 0.06), age: 0, life: 1.4 + Math.random() * 1.2,
+        spin: Math.random() * 6, turn: (Math.random() - 0.5) * 6, phase: Math.random() * 6,
+        gold: Math.random() < 0.25,
+      });
+    }
+    featherDebt = Math.min(featherDebt, 3);
+
     // Fire out of the mouth, louder roar, more fire
-    if (t < SWEEP) flameDebt += FLAMES_PER_SECOND * loud * loud * dt;
+    if (!eagle && t < SWEEP) flameDebt += FLAMES_PER_SECOND * loud * loud * dt;
     while (flameDebt >= 1 && flames.length < MAX_FLAMES) {
       flameDebt--;
       const life = 0.55 + Math.random() * 0.5;
@@ -88,6 +111,11 @@ export function celebrate() {
       f.vx *= 1 - 0.9 * dt;
     }
     for (let i = flames.length - 1; i >= 0; i--) if (flames[i].age > flames[i].life) flames.splice(i, 1);
+    for (const f of feathers) { // they flutter down, swaying side to side
+      f.age += dt; f.x += (f.vx + Math.sin(f.age * 6 + f.phase) * S * 0.3) * dt; f.y += f.vy * dt;
+      f.vy += S * 0.9 * dt; f.vy *= 1 - 1.4 * dt; f.vx *= 1 - 0.8 * dt; f.spin += f.turn * dt;
+    }
+    for (let i = feathers.length - 1; i >= 0; i--) if (feathers[i].age > feathers[i].life) feathers.splice(i, 1);
     for (const b of balls) {
       b.age += dt; b.x += b.vx * dt; b.y += b.vy * dt; b.vy += S * 2.8 * dt; b.spin += b.turn * dt;
     }
@@ -99,17 +127,19 @@ export function celebrate() {
     // Draw: balls (behind), fire, then the head on top, so the flames seem to leave his mouth
     for (const b of balls) drawBall(g, b.x, b.y, S * (0.05 + 0.1 * (1 - Math.exp(-b.age * 5))), b.spin);
     for (const f of flames) drawFlame(g, f, S);
+    for (const f of feathers) drawFeather(g, f);
     g.save();
     g.translate(hx, hy);
     g.rotate(-tilt);
     g.scale(-sc, sc);
     g.translate(-128, -128);
-    paintDragon(g, jaw);
+    if (eagle) paintEagle(g, jaw); else paintDragon(g, jaw);
     g.restore();
 
-    if (t < SWEEP + 0.3 || flames.length || balls.length) {
+    if (t < SWEEP + 0.3 || flames.length || balls.length || feathers.length) {
       if (t < SWEEP + 4) { requestAnimationFrame(frame); return; }
     }
+    g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, W, H);
     canvas.hidden = true;
     running = false;
@@ -146,6 +176,32 @@ function drawFlame(g, f, S) {
     g.fillStyle = u < 0.3 ? '#fffbe0' : '#ffd23a';
     g.fill();
   }
+  g.restore();
+}
+
+// A feather: a pointed leaf shape with a black outline and a quill down the middle, in the Eagles' teal
+// (some gold), fading out as it falls
+function drawFeather(g, f) {
+  const u = f.age / f.life, r = f.size;
+  g.save();
+  g.translate(f.x, f.y);
+  g.rotate(f.spin);
+  g.globalAlpha = u > 0.7 ? Math.max(0, (1 - u) / 0.3) : 1;
+  g.beginPath();
+  g.moveTo(0, -r * 1.6);
+  g.quadraticCurveTo(r * 0.9, -r * 0.4, 0, r * 1.3);
+  g.quadraticCurveTo(-r * 0.9, -r * 0.4, 0, -r * 1.6);
+  g.lineJoin = 'round';
+  g.lineWidth = Math.max(2, r * 0.22);
+  g.strokeStyle = '#111';
+  g.stroke();
+  g.fillStyle = f.gold ? '#f6c61c' : '#1f8a80';
+  g.fill();
+  g.beginPath();
+  g.moveTo(0, -r * 1.4);
+  g.lineTo(0, r * 1.6);
+  g.lineWidth = Math.max(1.5, r * 0.12);
+  g.stroke();
   g.restore();
 }
 
