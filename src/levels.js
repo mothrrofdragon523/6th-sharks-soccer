@@ -1,6 +1,7 @@
-// The options shown on the start menu (four seasons, Times Tables and Homework), and which question set each one uses.
+// The options shown on the start menu (Preseason, Regular Season, Playoffs, Championship, Times Tables and Homework; the old Preseason is archived in archive.js), and which question set each one uses.
 // (The set names in questions.js differ from the menu names; they're matched here by topic.)
-import { REGULAR_SEASON, SEMI_FINAL, CHAMPIONSHIP, TIMES_TABLES } from './questions.js';
+import { FIFTH_GRADE_REVIEW, TIMES_TABLES } from './questions.js';
+import { MODULE_5, MODULE_6, MODULES_5_AND_6 } from './modules.js';
 import { HOMEWORK } from './homework.js';
 
 export const LEVELS = [
@@ -9,24 +10,24 @@ export const LEVELS = [
     name: 'Preseason',
     icon: '⚽',
     color: '#66bb6a',
-    desc: 'Place value, decimals, rounding, powers of 10, scaling, patterns, shapes, coordinate plane',
-    questions: REGULAR_SEASON,
+    desc: '5th Grade Review',
+    questions: FIFTH_GRADE_REVIEW,
   },
   {
     id: 'regular',
     name: 'Regular Season',
     icon: '📅',
     color: '#42a5f5',
-    desc: 'One-step problems: fractions, multi-digit multiplication, long division, plus one-step word problems',
-    questions: SEMI_FINAL,
+    desc: 'Module 5 Review: unit rates, equivalent ratios, ratio tables and graphs, comparing numbers on the number line',
+    questions: MODULE_5,
   },
   {
     id: 'playoffs',
     name: 'Playoffs',
     icon: '🔥',
     color: '#ff9800',
-    desc: 'Order-of-operations word problems, reading real-world graphs, harder fractions, multiplication and division',
-    questions: CHAMPIONSHIP,
+    desc: 'Module 6 Review: converting customary and metric units, comparing measurements, circle graphs, ratios',
+    questions: MODULE_6,
   },
   {
     id: 'championship',
@@ -34,15 +35,15 @@ export const LEVELS = [
     icon: '🏆',
     color: '#fdd835',
     desc: 'A 3 Game Championship Showdown',
-    // Best of 3; each game steps up to the next season's questions
-    series: [REGULAR_SEASON, SEMI_FINAL, CHAMPIONSHIP],
+    // Best of 3: Module 5, then Module 6, then both together
+    series: [MODULE_5, MODULE_6, MODULES_5_AND_6],
   },
   {
     id: 'times',
     name: 'Times Tables',
     icon: '🔢',
     color: '#ab47bc',
-    desc: 'Type in the facts from 3 × 3 to 12 × 12: close shots get the 3s, 4s, 5s and 10s, longer shots the 6s–9s, and long-range shots the 11s and 12s, plus missing numbers from the 6s up',
+    desc: 'Fill in the blanks on the 7s, 9s, 11s and 12s: close shots get the 7s and 9s, longer shots the 11s and 12s, and long-range shots a mix of all four',
     questions: TIMES_TABLES,
   },
   {

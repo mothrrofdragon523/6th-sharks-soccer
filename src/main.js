@@ -68,7 +68,7 @@ function beginGame(level, questionSet, label) {
   game = {
     player: player.name,
     mode: (online ? '2 Players · ' : '') + (series ? `Championship · Game ${series.game}` : level.name),
-    set: LEVELS.find(l => l.questions === questionSet).name, // which season's questions
+    set: (LEVELS.find(l => l.questions === questionSet) || questionSet).name, // which season's questions
     gameId: new Date().toISOString(),
   };
   flushLog(); // send anything left over from last time
@@ -636,11 +636,12 @@ function cardNow() {
   const mark = el => (el.classList.contains('right') ? 'right' : el.classList.contains('wrong') ? 'wrong' : '');
   const entry = quiz.choices.querySelector('.entry');
   return {
-    q: question.q, tag: quiz.level.textContent, lvl: quiz.level.className, odds: quiz.odds.textContent,
+    q: question.blanks ? [question.q, ...question.blanks.parts.map(p => p.text)].join(' ') : question.q, tag: quiz.level.textContent, lvl: quiz.level.className, odds: quiz.odds.textContent,
     graph: question.graph || null,
-    kind: question.notebook ? 'notebook' : question.typed ? 'typed' : 'choices',
+    kind: question.notebook ? 'notebook' : question.blanks ? 'blanks' : question.typed ? 'typed' : 'choices',
     choices: [...quiz.choices.querySelectorAll('.choice')].map(b => ({ text: b.querySelector('.text').textContent, mark: mark(b), off: b.disabled })),
-    entry: entry && { text: entry.textContent, mark: mark(entry) },
+    entry: question.blanks ? { text: current.filled.map(w => w || '___').join(' · '), mark: current.correct === null ? '' : current.correct ? 'right' : 'wrong' }
+      : entry && { text: entry.textContent, mark: mark(entry) },
     result: quiz.result.hidden ? null : {
       verdict: quiz.verdict.textContent, cls: quiz.verdict.className, why: quiz.why.textContent,
       line: quiz.line.hidden ? null : current.line,
@@ -665,6 +666,7 @@ function showWatching(card) {
   quiz.el.classList.add('watching');
   quiz.el.classList.toggle('has-graph', !!card.graph);
   quiz.el.classList.toggle('typed', card.kind === 'typed');
+  quiz.el.classList.remove('blanks');
   quiz.title.textContent = `👀 ${nameOf(otherTeam())}'s shot: watching`;
   quiz.q.textContent = card.q;
   quiz.level.textContent = card.tag;
@@ -695,7 +697,7 @@ function showWatching(card) {
       const entry = document.createElement('div');
       entry.className = `entry ${card.entry ? card.entry.mark : ''}`;
       entry.textContent = card.entry ? card.entry.text : '?';
-      note.textContent = 'He types his answer on his number pad.';
+      note.textContent = card.kind === 'blanks' ? 'He fills in the blanks from the word bank.' : 'He types his answer on his number pad.';
       quiz.choices.replaceChildren(entry, note);
     }
   }
@@ -758,7 +760,9 @@ function askQuestion() {
   quiz.line.hidden = true;
   quiz.speak.hidden = !canSpeak;
   quiz.el.classList.toggle('typed', question.typed);
+  quiz.el.classList.toggle('blanks', !!question.blanks);
   if (readAloudOn()) say(questionSpeech());
+  if (question.blanks) { showBlanks(); return; }
   if (question.notebook) { showNotebook(); return; }
   if (question.typed) { showNumberPad(); return; }
   quiz.choices.replaceChildren(...question.choices.map((text, i) => {
@@ -774,7 +778,11 @@ function askQuestion() {
 
 // ---------- Read aloud: the question and its choices, or what he got and why ----------
 function questionSpeech() {
-  const { q, choices } = current.question;
+  const { q, choices, blanks } = current.question;
+  if (blanks) {
+    const sentences = blanks.parts.map((p, i) => `${i + 1}. ${p.text.replace('___', 'blank')}`);
+    return [q, ...sentences, `Word bank: ${blanks.bank.join(', ')}.`].join(' ');
+  }
   const ask = /[.?!]$/.test(q) && !/[=×÷+−] ?\?$/.test(q) ? q : `${q}.`; // a pause before the choices
   return [ask, ...choices.map((c, i) => `${'ABCDEF'[i]}: ${c}.`)].join(' ');
 }
@@ -806,6 +814,73 @@ function notebookDone() {
   if (!current || current.correct !== null || !current.question.notebook) return;
   quiz.choices.querySelector('.notebook-done').disabled = true;
   attempt('written in notebook', true);
+}
+
+// Fill-in-the-blank with a word bank (the vocabulary review that opens a Module game): tap a blank,
+// then tap a word to put in it. Every blank has to be right, on the one try, to count.
+function showBlanks() {
+  const { blanks } = current.question;
+  current.filled = blanks.parts.map(() => null);
+  current.pick = 0;
+  const rows = blanks.parts.map(part => {
+    const [before, after] = part.text.split('___');
+    const row = document.createElement('p');
+    row.className = 'blank-row';
+    const slot = document.createElement('button');
+    slot.className = 'blank-slot';
+    row.append(before, slot, after);
+    return { row, slot };
+  });
+  const bank = document.createElement('div');
+  bank.className = 'word-bank';
+  const label = document.createElement('span');
+  label.className = 'bank-label';
+  label.textContent = 'Word bank';
+  const words = blanks.bank.map(word => {
+    const b = document.createElement('button');
+    b.className = 'bank-word';
+    b.textContent = word;
+    return b;
+  });
+  bank.append(label, ...words);
+  const check = document.createElement('button');
+  check.className = 'notebook-done blanks-check';
+  check.textContent = '✓ Check';
+  const draw = () => {
+    rows.forEach(({ slot }, i) => {
+      slot.textContent = current.filled[i] || '\u00a0';
+      slot.classList.toggle('picked', current.correct === null && i === current.pick);
+    });
+    words.forEach(b => b.classList.toggle('used', current.filled.includes(b.textContent)));
+    check.disabled = current.correct !== null || current.filled.some(w => !w);
+  };
+  rows.forEach(({ slot }, i) => slot.addEventListener('click', () => {
+    if (current.correct !== null) return;
+    if (current.pick === i) current.filled[i] = null; // tapping the chosen blank empties it
+    current.pick = i;
+    draw();
+  }));
+  words.forEach(b => b.addEventListener('click', () => {
+    if (current.correct !== null) return;
+    current.filled = current.filled.map(w => (w === b.textContent ? null : w)); // one blank per word
+    current.filled[current.pick] = b.textContent;
+    const next = current.filled.findIndex(w => !w);
+    if (next >= 0) current.pick = next;
+    draw();
+  }));
+  check.addEventListener('click', submitBlanks);
+  current.rows = rows;
+  quiz.choices.replaceChildren(...rows.map(r => r.row), bank, check);
+  draw();
+}
+
+function submitBlanks() {
+  if (!current || current.correct !== null || !current.question.blanks || current.filled.some(w => !w)) return;
+  const { parts } = current.question.blanks;
+  const marks = parts.map((p, i) => current.filled[i] === p.a);
+  attempt(current.filled.join(', '), marks.every(Boolean));
+  current.rows.forEach(({ slot }, i) => { slot.classList.remove('picked'); slot.classList.add(marks[i] ? 'right' : 'wrong'); slot.disabled = true; });
+  quiz.choices.querySelectorAll('.bank-word, .blanks-check').forEach(b => { b.disabled = true; });
 }
 
 // Typed answers (Times Tables facts and some homework): an on-screen number pad, so no choices
@@ -1022,6 +1097,10 @@ window.addEventListener('keydown', e => {
   }
   if (current.question.notebook) {
     if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) { e.preventDefault(); notebookDone(); }
+    return;
+  }
+  if (current.question.blanks) {
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) { e.preventDefault(); submitBlanks(); }
     return;
   }
   if (current.question.typed) {
