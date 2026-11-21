@@ -79,6 +79,12 @@ export const MODULE_6 = {
     { skill: 'Converting units', q: 'How many centimeters are in 3 meters? (1 m = 100 cm)', a: '300', wrong: ['30', '3,000', '0.03'], why: '3 × 100 = 300 centimeters.' },
     { skill: 'Converting units', q: 'How many kilograms are in 4,000 grams? (1 kg = 1,000 g)', a: '4', wrong: ['0.4', '40', '4,000,000'], why: '4,000 ÷ 1,000 = 4 kilograms.' },
     { skill: 'Converting units', q: 'How many feet are in 2 yards? (1 yd = 3 ft)', a: '6', wrong: ['24', '72', '12'], why: '2 × 3 = 6 feet.' },
+    { skill: 'Comparing decimals', q: 'Which symbol makes this true? 5.3 ___ 5.03', a: '>', wrong: ['<', '=', 'You can\'t tell'], why: '5.3 is 5.30, which is more than 5.03.' },
+    { skill: 'Comparing decimals', q: 'Which symbol makes this true? −3.4 ___ −2.9', a: '<', wrong: ['>', '=', 'You can\'t tell'], why: '−3.4 is farther left on the number line than −2.9, so it is less.' },
+    { skill: 'Dividing mixed numbers', q: '2 1/4 ÷ 3 = ?', a: '3/4', wrong: ['6 3/4', '1 1/4', '1/12'], why: '2 1/4 is 9/4. 9/4 ÷ 3 = 9/4 × 1/3 = 3/4.' },
+    { skill: 'Converting units', q: 'How many ounces are in 5 pounds? (1 lb = 16 oz)', a: '80', wrong: ['60', '21', '800'], why: '5 × 16 = 80 ounces.' },
+    { skill: 'Writing ratios', q: 'A fruit stand has 14 apples and 21 oranges. Write the ratio of apples to oranges as a fraction in simplest form.', a: '2/3', wrong: ['3/2', '2/5', '1/3'], why: '14/21 divided top and bottom by 7 is 2/3.' },
+    { skill: 'Circles', q: 'A full circle is 360°. How many degrees are in a quarter-circle?', a: '90°', wrong: ['45°', '180°', '60°'], why: '360 ÷ 4 = 90 degrees.' },
   ],
   medium: [
     { skill: 'Converting units', q: 'How many feet are in 4.5 yards? (1 yd = 3 ft)', a: '13.5', wrong: ['1.5', '54', '16.5'], why: '4.5 × 3 = 13.5 feet.' },
@@ -91,6 +97,12 @@ export const MODULE_6 = {
     { skill: 'Comparing measurements', q: 'Which symbol makes this true? 2.5 km ___ 2,400 m', a: '>', wrong: ['<', '=', 'You can\'t tell'], why: '2.5 km = 2,500 m, which is more than 2,400 m.' },
     { skill: 'Comparing measurements', q: 'Which symbol makes this true? 8,200 mg ___ 8.2 g', a: '=', wrong: ['<', '>', 'You can\'t tell'], why: '1 g = 1,000 mg, so 8.2 g = 8,200 mg.' },
     { skill: 'Circle graphs', q: 'In a survey of 72 students, 18 chose soccer as their favorite sport. In a circle graph, what is the angle measure of the soccer section?', a: '90°', wrong: ['25°', '180°', '18°'], why: '18/72 = 1/4 of the students, and 1/4 of 360° is 90°.' },
+    { skill: 'Converting units', q: 'How many yards are in 2 1/2 miles? (1 mi = 1,760 yd)', a: '4,400', wrong: ['440', '13,200', '1,762.5'], why: '2.5 × 1,760 = 4,400 yards.' },
+    { skill: 'Converting units', q: 'A race is 5 miles long. About how many kilometers is that? (1 mi ≈ 1.6 km)', a: '8 kilometers', wrong: ['3.1 kilometers', '6.6 kilometers', '80 kilometers'], why: 'Miles to kilometers: multiply by 1.6. 5 × 1.6 = 8.' },
+    { skill: 'Converting units', q: 'A rope is 12.2 meters long. About how many feet is that? (1 m ≈ 3.28 ft)', a: '40 feet', wrong: ['3.7 feet', '15.5 feet', '400 feet'], why: '12.2 × 3.28 = 40.016, which is about 40 feet.' },
+    { skill: 'Converting units', q: 'A bag of flour weighs 56 ounces. How many pounds is that? (1 lb = 16 oz)', a: '3.5', wrong: ['896', '40', '4'], why: '56 ÷ 16 = 3.5 pounds.' },
+    { skill: 'Equivalent measurements', q: 'Which measurement is equivalent to 360 inches? (1 ft = 12 in.)', a: '30 feet', wrong: ['3 feet', '36 feet', '360 feet'], why: '360 ÷ 12 = 30 feet.' },
+    { skill: 'Equivalent measurements', q: 'Which measurement is equivalent to 6,500 milligrams? (1 g = 1,000 mg)', a: '6.5 grams', wrong: ['0.65 grams', '65 grams', '6,500 grams'], why: '6,500 ÷ 1,000 = 6.5 grams.' },
   ],
   hard: [
     { skill: 'Comparing measurements', q: 'A hallway is 30 feet long and a rug is 8 meters long. Which is longer, and by how much? (1 m ≈ 3.28 ft)', a: 'The hallway, by about 3.76 feet', wrong: ['The rug, by about 3.76 feet', 'The hallway, by about 22 feet', 'The rug, by about 22 feet'], why: '8 m ≈ 8 × 3.28 = 26.24 feet. The hallway is longer: 30 − 26.24 = 3.76 feet.' },
@@ -103,6 +115,12 @@ export const MODULE_6 = {
     { skill: 'Circle graphs', q: 'In a circle graph of 300 sixth graders\' favorite sports, the soccer section is 72°. How many students chose soccer?', a: '60', wrong: ['72', '20', '216'], why: '72/360 = 1/5 of the circle, and 1/5 of 300 is 60.' },
     { skill: 'Conversion factors', q: 'Which conversion factor changes inches to centimeters?', a: '2.54 cm / 1 in.', wrong: ['1 cm / 2.54 in.', '2.54 in. / 1 cm', '1 in. / 2.54 cm'], why: 'Put the unit you want (centimeters) on top and the unit you start with (inches) on the bottom, so the inches cancel.' },
     { skill: 'Conversion word problems', q: 'A cheetah runs 112 kilometers per hour. A kilometer is about 5/8 mile. About how many miles per hour is that?', a: '70 miles per hour', wrong: ['179 miles per hour', '78 miles per hour', '700 miles per hour'], why: '112 × 5/8 = 560/8 = 70.' },
+    { skill: 'Conversion factors', q: 'To convert gallons to fluid ounces with a conversion factor, where do the units go?', a: 'Fluid ounces on top, gallons on the bottom', wrong: ['Gallons on top, fluid ounces on the bottom', 'Fluid ounces on top and on the bottom', 'Gallons on top and on the bottom'], why: 'Put the unit you want on top and the unit you start with on the bottom, so the gallons cancel.' },
+    { skill: 'Circle graphs', q: 'In a survey of 80 students, 16 chose spring, 36 chose summer, 20 chose fall and 8 chose winter as their favorite season. In a circle graph, what is the angle for summer?', a: '162°', wrong: ['45°', '36°', '126°'], why: '36/80 = 0.45, and 0.45 × 360° = 162°.' },
+    { skill: 'Conversion word problems', q: 'A bird flies 96 kilometers per hour. A kilometer is about 5/8 mile. About how many miles per hour is that?', a: '60 miles per hour', wrong: ['154 miles per hour', '38 miles per hour', '480 miles per hour'], why: '96 × 5/8 = 480/8 = 60.' },
+    { skill: 'Conversion word problems', q: 'A bike race is 42.5 miles long. A mile is about 1.6 kilometers. How many kilometers is that, to the nearest kilometer?', a: '68 kilometers', wrong: ['27 kilometers', '44 kilometers', '680 kilometers'], why: '42.5 × 1.6 = 68.' },
+    { skill: 'Ordering weights', q: 'Which list goes from LEAST to GREATEST weight? (1 lb = 16 oz)', a: '1 1/2 lb, 30 oz, 2 lb, 40 oz', wrong: ['30 oz, 1 1/2 lb, 2 lb, 40 oz', '2 lb, 1 1/2 lb, 30 oz, 40 oz', '40 oz, 2 lb, 30 oz, 1 1/2 lb'], why: 'In ounces: 1 1/2 lb = 24, 30 oz = 30, 2 lb = 32 and 40 oz = 40.' },
+    { skill: 'Comparing measurements', q: 'A football field is 100 yards long and a track is 95 meters long. Which is longer, and by how much? (1 m ≈ 1.09 yd)', a: 'The track, by about 3.55 yards', wrong: ['The field, by about 3.55 yards', 'The track, by 5 yards', 'The field, by 5 yards'], why: '95 m ≈ 95 × 1.09 = 103.55 yards. The track is longer: 103.55 − 100 = 3.55 yards.' },
   ],
 };
 
